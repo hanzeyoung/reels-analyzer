@@ -1,0 +1,33 @@
+# 환경변수 (절대 GitHub에 올리면 안 됨!)
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# 가상환경
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 임시 파일
+*.log
+*.tmp
+/tmp/
+
+# Streamlit
+.streamlit/secrets.toml
