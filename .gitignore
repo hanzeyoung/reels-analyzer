@@ -13,7 +13,9 @@ build/
 # 가상환경
 venv/
 .venv/
+.venv311/
 env/
+.python-packages/
 
 # IDE
 .vscode/
