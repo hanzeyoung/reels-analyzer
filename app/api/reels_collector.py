@@ -399,8 +399,10 @@ def get_top_reels(
     max_items: int = 20,
     top_n: int = 5,
     save_dir: str | None = None,
+    candidate_multiplier: int = 3,
 ) -> list[dict]:
-    raw_data = get_reels_data(keyword, max_items=max_items)
+    candidate_count = max(max_items, top_n * candidate_multiplier)
+    raw_data = get_reels_data(keyword, max_items=candidate_count)
     processed = process_reels(raw_data, keyword)
     previous_reels = sync_existing_videos_to_log(save_dir) if save_dir else []
 
@@ -607,7 +609,7 @@ def download_top_reel_videos(top_reels: list[dict], save_dir: str = "videos") ->
 
 # 3. 메인 실행부
 if __name__ == "__main__":
-    keyword = "#성수동카페"
+    keyword = "성수동카페"
 
     top_reels = get_top_reels(
         keyword=keyword,

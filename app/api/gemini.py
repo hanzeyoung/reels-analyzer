@@ -4,15 +4,23 @@ Gemini 1.5 Pro — 멀티모달 릴스 영상 분석 모듈
 (비전 + 텍스트 분석)
 """
 
+import io
 import os
 import json
+import tempfile
+from pathlib import Path
+
 import google.generativeai as genai
+import httpx
 from dotenv import load_dotenv
+from PIL import Image
+
+from app.core.frame_extractor import extract_unique_frames
 
 load_dotenv()
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-MODEL_NAME = "gemini-1.5-pro"
+MODEL_NAME = "gemini-1.5-flash"
 
 
 # ── 프롬프트 ─────────────────────────────────
@@ -53,7 +61,7 @@ def analyze_reel_from_file(
     caption: str = "",
 ) -> dict:
     """
-    로컬 영상 파일을 Gemini에 업로드하여 분석합니다.
+    로컬 영상에서 프레임을 추출한 뒤 Gemini Flash로 분석합니다.
 
     Args:
         video_path: 로컬 영상 파일 경로 (.mp4 등)
@@ -62,17 +70,60 @@ def analyze_reel_from_file(
     Returns:
         분석 결과 dict
     """
+    with tempfile.TemporaryDirectory(prefix="reel_frames_") as frame_dir:
+        frame_paths = extract_unique_frames(video_path, output_dir=frame_dir)
+        return analyze_reel_from_frames(frame_paths, caption=caption)
+
+
+def analyze_reel_from_frames(
+    frame_paths: list[str],
+    caption: str = "",
+) -> dict:
+    """
+    추출된 프레임 이미지 목록을 Gemini Flash로 분석합니다.
+
+    영상 전체 업로드 대신 JPEG 프레임만 보내므로 트래픽과 토큰 사용량을 줄일 수 있습니다.
+    """
+    if not frame_paths:
+        raise ValueError("분석할 프레임이 없습니다.")
+
     model = genai.GenerativeModel(MODEL_NAME)
 
-    print(f"[Gemini] 영상 업로드 중: {video_path}")
-    video_file = genai.upload_file(path=video_path)
+    print(f"[Gemini] 프레임 {len(frame_paths)}장 분석 중")
+    images = [Image.open(path) for path in frame_paths]
 
     prompt = ANALYSIS_PROMPT
     if caption:
         prompt += f"\n\n[본문 캡션]\n{caption}"
 
-    response = model.generate_content([video_file, prompt])
-    return _parse_response(response.text)
+    response = model.generate_content([*images, prompt])
+    result = _parse_response(response.text)
+    result["frame_count"] = len(frame_paths)
+
+    usage = getattr(response, "usage_metadata", None)
+    if usage:
+        result["usage_metadata"] = {
+            "prompt_token_count": getattr(usage, "prompt_token_count", None),
+            "candidates_token_count": getattr(usage, "candidates_token_count", None),
+            "total_token_count": getattr(usage, "total_token_count", None),
+        }
+
+    return result
+
+
+def analyze_reel_from_url(media_url: str, caption: str = "") -> dict:
+    """media_url에서 영상을 임시 다운로드한 뒤 프레임 기반으로 분석합니다."""
+    response = httpx.get(media_url, timeout=60)
+    response.raise_for_status()
+
+    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
+        f.write(response.content)
+        video_path = f.name
+
+    try:
+        return analyze_reel_from_file(video_path, caption=caption)
+    finally:
+        Path(video_path).unlink(missing_ok=True)
 
 
 # ── 썸네일 이미지로 분석 (영상 없을 때 대안) ──
@@ -85,10 +136,6 @@ def analyze_reel_from_thumbnail(
     썸네일 이미지 URL로 부분 분석합니다.
     (영상 파일이 없을 때 대안 — 비전 항목만 가능)
     """
-    import httpx
-    from PIL import Image
-    import io
-
     model = genai.GenerativeModel(MODEL_NAME)
 
     img_bytes = httpx.get(thumbnail_url).content
@@ -137,6 +184,27 @@ def _parse_response(text: str) -> dict:
     except json.JSONDecodeError as e:
         print(f"[경고] Gemini 응답 파싱 실패: {e}")
         return {"raw_response": text, "error": str(e)}
+
+
+def format_report(analysis: dict) -> str:
+    """데모용 간단 텍스트 보고서를 생성합니다."""
+    return f"""
+=== 릴스 분석 데모 리포트 ===
+
+촬영 구도: {", ".join(analysis.get("camera_angles", [])) or "-"}
+컷 속도: {analysis.get("cut_speed", "-")}
+후킹 장면/문구: {analysis.get("hook_text", "-")}
+자막 위치: {analysis.get("subtitle_position", "-")}
+색감: {analysis.get("color_tone", "-")}
+BGM 분위기: {analysis.get("bgm_mood", "-")}
+캡션 후킹: {", ".join(analysis.get("caption_hooks", [])) or "-"}
+
+요약:
+{analysis.get("analysis_summary", "-")}
+
+프레임 수: {analysis.get("frame_count", "-")}
+토큰 사용량: {analysis.get("usage_metadata", {})}
+""".strip()
 
 
 # ── 빠른 테스트 ───────────────────────────────
