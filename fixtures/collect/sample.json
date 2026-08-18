@@ -1,0 +1,27 @@
+{
+  "reels": [
+    {
+      "code": "Cabc123",
+      "url": "https://instagram.com/reel/Cabc123",
+      "username": "cafe_seongsu",
+      "caption": "성수동 카페 신메뉴 #성수동카페 #카페추천",
+      "hashtags": ["#성수동카페", "#카페추천"],
+      "audio_title": "lofi beat",
+      "video_url": null,
+      "thumbnail_url": null,
+      "duration_sec": 18.0,
+      "taken_at": "2026-07-20T09:00:00",
+      "play_count": 12000,
+      "like_count": 800,
+      "comment_count": 40,
+      "share_count": 120
+    }
+  ],
+  "accounts": [
+    {
+      "username": "cafe_seongsu",
+      "follower_count": 3200,
+      "fetched_at": "2026-08-01T00:00:00"
+    }
+  ]
+}
