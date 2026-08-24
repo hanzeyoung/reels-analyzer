@@ -12,6 +12,7 @@ from uuid import UUID
 
 from app.db import guides as guides_db
 from app.db import jobs as jobs_db
+from app.db import reels as reels_db
 from app.pipeline import compare, score
 from app.schemas.analyze import ReelAnalysis, ShotSegment
 from app.schemas.common import Confidence
@@ -138,6 +139,26 @@ def _evidence_note_text(comparison: ComparisonResult) -> str:
     )
 
 
+def _my_reel_block_text(my_reel: ReelAnalysis | None, comparison: ComparisonResult) -> str | None:
+    """P5(내 릴스 진단). `my_reel`이 없으면 None(호출부가 `{my_reel_block}` 줄 자체를 지운다)."""
+    if my_reel is None:
+        return None
+    if comparison.timing is None:
+        benchmark = "벤치마크 없음(표본 부족)"
+    else:
+        t = comparison.timing
+        benchmark = (
+            f"컷 수 {t.cut_count_high:.1f}개, 평균 샷 길이 {t.avg_shot_sec_high:.1f}초, "
+            f"첫 컷 길이 {t.first_shot_sec_high:.1f}초"
+        )
+    return (
+        "### 내 릴스 진단\n"
+        f"내 릴스: 컷 수 {my_reel.cut_count}개, 평균 샷 길이 {my_reel.avg_shot_sec:.1f}초, "
+        f"첫 컷 길이 {my_reel.first_shot_sec:.1f}초\n"
+        f"돌파형 상위 릴스 평균(벤치마크): {benchmark}"
+    )
+
+
 def render_user_prompt(
     *,
     business_type: str,
@@ -147,6 +168,7 @@ def render_user_prompt(
     big_account: list[ReelAnalysis],
     constraints: UserConstraints,
     confidence: Confidence,
+    my_reel: ReelAnalysis | None = None,
 ) -> str:
     """prompts/guide_writer.md의 User 템플릿을 채운다.
 
@@ -156,9 +178,12 @@ def render_user_prompt(
     from app.prompts import load_prompt
 
     template = load_prompt("guide_writer").user_template
-    # P5(내 릴스 진단)는 아직 구현 안 됨 — my_reel_url이 있어도 지금은 항상 진단 없이
-    # 진행한다. "없으면 블록 자체를 넣지 않음"이라는 템플릿 지시대로 줄 전체를 지운다.
-    template = _MY_REEL_BLOCK_LINE_RE.sub("", template)
+    my_reel_block = _my_reel_block_text(my_reel, comparison)
+    if my_reel_block is None:
+        # "없으면 블록 자체를 넣지 않음"이라는 템플릿 지시대로 줄 전체를 지운다.
+        template = _MY_REEL_BLOCK_LINE_RE.sub("", template)
+    else:
+        template = template.replace("{my_reel_block}", my_reel_block)
 
     replacements = {
         "{business_type}": business_type,
@@ -215,6 +240,11 @@ async def run(job_id: str) -> None:
 
     confidence = compute_confidence(comparison)
 
+    my_reel: ReelAnalysis | None = None
+    my_raw_reel = await reels_db.get_my_reel(keyword, business_type)
+    if my_raw_reel is not None:
+        my_reel = await compare.build_my_reel_analysis(my_raw_reel.code, my_raw_reel.audio_title)
+
     provider = get_writer_provider()
     guide = await provider.write_guide(
         business_type=business_type,
@@ -224,6 +254,7 @@ async def run(job_id: str) -> None:
         big_account=big_account,
         constraints=constraints,
         confidence=confidence,
+        my_reel=my_reel,
     )
 
     await guides_db.create(

@@ -1,6 +1,7 @@
 from datetime import UTC, date, datetime
 
 from app.pipeline.guide import (
+    _my_reel_block_text,
     _week_of,
     compute_confidence,
     filter_reference_shots,
@@ -150,6 +151,22 @@ def test_render_user_prompt_strips_arrow_comments_and_my_reel_placeholder():
     assert "곡A" in prompt
 
 
+def test_render_user_prompt_includes_my_reel_diagnosis_block_when_present():
+    my_reel = _reel_analysis(
+        "MY1", [_shot()], track="my_reel", bucket="unknown",
+        cut_count=1, avg_shot_sec=2.0, first_shot_sec=1.5,
+    )
+    prompt = render_user_prompt(
+        business_type="카페", keyword="성수동카페", comparison=_sufficient_comparison(),
+        breakout=[_reel_analysis("h0", [_shot()])],
+        big_account=[_reel_analysis("b0", [_shot()], track="big_account")],
+        constraints=UserConstraints(), confidence="충분", my_reel=my_reel,
+    )
+    assert "내 릴스 진단" in prompt
+    assert "{my_reel_block}" not in prompt
+    assert "←" not in prompt
+
+
 def test_render_user_prompt_insufficient_shows_reason_in_evidence_note():
     prompt = render_user_prompt(
         business_type="카페", keyword="성수동카페", comparison=_insufficient_comparison(),
@@ -157,6 +174,35 @@ def test_render_user_prompt_insufficient_shows_reason_in_evidence_note():
     )
     assert "표본 부족" in prompt
     assert "데이터 없음" in prompt  # breakout_shots/timing 등
+
+
+# ── _my_reel_block_text (P5) ────────────────────────────────────────
+
+
+def test_my_reel_block_text_none_when_no_my_reel():
+    assert _my_reel_block_text(None, _sufficient_comparison()) is None
+
+
+def test_my_reel_block_text_includes_benchmark_when_timing_present():
+    my_reel = _reel_analysis(
+        "MY1", [_shot(), _shot(index=1, t_start=1.0, t_end=3.0)],
+        track="my_reel", bucket="unknown", cut_count=2, avg_shot_sec=2.5, first_shot_sec=1.0,
+    )
+    text = _my_reel_block_text(my_reel, _sufficient_comparison())
+    assert text is not None
+    assert "내 릴스: 컷 수 2개" in text
+    assert "벤치마크" in text
+    assert "표본 부족" not in text
+
+
+def test_my_reel_block_text_shows_no_benchmark_when_timing_missing():
+    my_reel = _reel_analysis(
+        "MY1", [_shot()], track="my_reel", bucket="unknown",
+        cut_count=1, avg_shot_sec=2.0, first_shot_sec=1.5,
+    )
+    text = _my_reel_block_text(my_reel, _insufficient_comparison())
+    assert text is not None
+    assert "벤치마크 없음(표본 부족)" in text
 
 
 # ── _week_of ─────────────────────────────────────────────────────────

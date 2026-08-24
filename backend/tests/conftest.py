@@ -24,6 +24,33 @@ requires_db = pytest.mark.skipif(
 )
 
 
+def pytest_configure(config: pytest.Config) -> None:
+    """P6.5 사고(2026-08-24): `.env`가 real 모드인 채로 pytest를 돌려서
+    `test_loop.py` 등이 실제 Apify를 여러 번 호출해버렸다("fake 모드 테스트"라는
+    이름과 무관하게, provider factory는 실제 `.env` 설정을 그대로 따른다).
+    "앞으로 조심"으로는 재발을 못 막아서 구조로 막는다 — 테스트 수집 전에
+    세션 자체를 실패시킨다. 실측 스크립트는 pytest를 안 타므로 영향 없다.
+    """
+    get_settings.cache_clear()
+    settings = get_settings()
+    real_modes = {
+        name: mode
+        for name, mode in (
+            ("APIFY_MODE", settings.apify_mode),
+            ("VISION_MODE", settings.vision_mode),
+            ("WRITER_MODE", settings.writer_mode),
+        )
+        if mode == "real"
+    }
+    if real_modes:
+        raise pytest.UsageError(
+            f"real 모드로 pytest를 돌리면 실제 API가 호출돼 과금된다 — {real_modes}. "
+            "scripts/real_mode.sh로 감싸서 실행 중이면 그 래퍼를 빼고 pytest만 다시 실행해라. "
+            ".env 자체가 real이면 fake로 되돌려라(평소엔 항상 fake여야 한다). "
+            "실측은 pytest가 아니라 scripts/real_mode.sh로 감싼 별도 스크립트로 해라."
+        )
+
+
 @pytest_asyncio.fixture
 async def clean_jobs_table():
     get_settings.cache_clear()

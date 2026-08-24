@@ -75,6 +75,38 @@ make dev       # api + worker + frontend 동시 실행
 make stage S=analyze F=cafe_20   # 단일 단계만 fixture로 실행
 ```
 
+**주의**: 테스트가 별도 DB로 격리돼 있지 않고 실제 개발용 Supabase DB를 그대로 쓴다.
+`make dev`(워커 포함)가 백그라운드에 살아있는 상태로 `make check`/pytest를 돌리면 워커가
+테스트 job을 가로채 처리해버려 결과가 비결정적으로 깨진다(실제로 겪은 사례, 2026-08-20) —
+`make check` 전에는 `make dev`를 꺼라.
+
+**`make check`/실측 전 프로세스 사전 점검(필수)**: 아래 명령으로 남아있는 프로세스가
+없는지 항상 먼저 확인해라.
+
+```bash
+ps aux | grep -E "pytest|app.worker|uvicorn|vite|node.*vite" | grep -v grep
+```
+
+- **좀비 `pytest` 프로세스도 `make dev`와 똑같은 문제를 일으킨다.** 타임아웃으로
+  백그라운드 전환된 `pytest`/`python -m app.worker`/`uvicorn`/`npm run dev` 호출을
+  안 죽이고 방치하면 며칠씩 살아남아 같은 원격 DB에 테스트 데이터를 계속 쓰고 지우며
+  실측 결과를 오염시킨다(실제로 겪은 사례, 6~10일간 방치돼 실측 잡 하나를 완전히
+  무효로 만듦, 2026-08-24). **긴 명령이 "타임아웃으로 백그라운드 전환됨" 알림을 받으면,
+  그 작업이 끝난 뒤 반드시 위 `ps aux` 명령으로 확인하고 `kill -9`로 정리할 것** —
+  "나중에 확인하면 되겠지"로 넘기지 마라.
+- `nohup ... &`로 띄운 것도 마찬가지로 작업이 끝나면 명시적으로 죽여라. 죽였는지
+  확인 없이 다음 작업(특히 실 API를 호출하는 실측)으로 넘어가지 마라.
+
+**`APIFY_MODE`/`VISION_MODE`/`WRITER_MODE`는 항상 fake다. `.env`를 손으로 real로
+고치지 마라.** `make dev`(운영)와 `pytest`(테스트)가 같은 `.env`를 공유해서, 손으로
+바꿔놓고 되돌리는 걸 잊으면 테스트가 실제 API를 호출해버린다(실제로 겪은 사고,
+$0.4 이상 의도치 않게 과금됨, P6.5 2026-08-24). 실측(real API로 직접 확인)이 필요하면
+`backend/scripts/real_mode.sh <명령>`으로만 해라 — `.env`는 그대로 두고 그 명령의
+프로세스(및 자식 프로세스)에만 real 환경변수를 준다. `tests/conftest.py`의
+`pytest_configure`가 세 MODE 중 하나라도 real이면 `pytest` 세션 자체를 즉시
+실패시키는 구조적 가드도 있다 — 이 가드가 막아준다고 안심하지 말고, 애초에 `.env`를
+안 건드리는 습관을 지켜라.
+
 ---
 
 ## 금지 목록

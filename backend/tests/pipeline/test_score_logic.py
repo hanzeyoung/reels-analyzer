@@ -1,9 +1,11 @@
 from datetime import UTC, datetime
 
 from app.pipeline.score import (
+    BUCKET_UPPER_BOUNDS,
     build_scored_reel,
     calculate_metrics,
     classify_bucket,
+    compute_percentile_boundaries,
     select_big_account,
     select_breakout,
     select_control,
@@ -57,6 +59,13 @@ def test_calculate_metrics_zero_play_count_does_not_divide_by_zero():
     assert metrics.reach_multiple == 0.0  # 0 / max(1000,1)
 
 
+def test_calculate_metrics_like_count_none_excluded_not_zeroed():
+    # P6.5(2026-08-24): 좋아요 비공개(None)는 0으로 채우지 않고 분자에서 뺀다.
+    reel = _reel(play_count=1000, like_count=None, comment_count=10, share_count=10)
+    metrics = calculate_metrics(reel, _account(2000))
+    assert metrics.engagement_rate == 0.02  # (0+10+10)/1000, like 기여 없음
+
+
 # ── classify_bucket ──────────────────────────────────────────────────
 
 
@@ -72,12 +81,34 @@ def test_classify_bucket_boundaries():
     assert classify_bucket(1_000_000) == "B4"
 
 
+def test_classify_bucket_with_custom_boundaries():
+    custom = {"B1": 500, "B2": 5_000, "B3": 50_000}
+    assert classify_bucket(400, custom) == "B1"
+    assert classify_bucket(4_000, custom) == "B2"
+    assert classify_bucket(500, custom) == "B2"  # 커스텀 경계면 999는 더 이상 B1이 아님
+
+
 def test_build_scored_reel_combines_metrics_and_bucket():
     reel = _reel()
     scored = build_scored_reel(reel, _account(500))
     assert scored.bucket == "B1"
     assert scored.track is None
     assert scored.metrics.reach_multiple is not None
+
+
+# ── compute_percentile_boundaries ──────────────────────────────────────
+
+
+def test_compute_percentile_boundaries_splits_into_tertiles():
+    # 1~300 균등분포. 33%/66% 컷포인트는 대략 100/200 근처여야 한다.
+    follower_counts = list(range(1, 301))
+    boundaries = compute_percentile_boundaries(follower_counts)
+
+    assert 90 <= boundaries["B1"] <= 110
+    assert 190 <= boundaries["B2"] <= 210
+    assert boundaries["B1"] < boundaries["B2"]
+    # B3(메가 계정 절대 기준)는 분위수로 안 건드리고 고정값을 유지한다(판단, 계약 3-1).
+    assert boundaries["B3"] == BUCKET_UPPER_BOUNDS["B3"]
 
 
 # ── track selection ──────────────────────────────────────────────────
@@ -169,3 +200,26 @@ def test_select_control_without_follower_data_uses_engagement_rate():
     )
 
     assert [r.reel.code for r in control] == ["low_eng"]
+
+
+def test_select_control_excludes_unknown_like_count_when_no_follower_data():
+    # P6.5(2026-08-24): like_count=None인 릴스는 engagement_rate가 실제보다 낮게 나와서
+    # control(하위) 후보에 부당하게 쏠릴 수 있다 — engagement_rate 랭킹 분기에서만 제외.
+    known_low = _scored("known_low", follower_count=None, play_count=1000, engagement=0.05)
+    unknown_like = build_scored_reel(
+        _reel(code="unknown_like", play_count=1000, like_count=None, comment_count=0,
+              share_count=0),
+        _account(None),
+    )
+    high_engagement = _scored("high_eng", follower_count=None, play_count=1000, engagement=0.3)
+
+    breakout = select_breakout(
+        [known_low, unknown_like, high_engagement], top_n=1, follower_data_available=False
+    )
+    control = select_control(
+        [known_low, unknown_like, high_engagement], breakout, top_n=2,
+        follower_data_available=False,
+    )
+
+    assert "unknown_like" not in [r.reel.code for r in control]
+    assert [r.reel.code for r in control] == ["known_low"]

@@ -1,18 +1,24 @@
-"""P1/P2에서 추가된 DB 모듈 회귀 테스트 (accounts/reels/reel_metrics/shot_segments/
-reel_analyses) + collect.run()/score.run() 엔드투엔드(fake 모드).
+"""P1/P2/P5에서 추가된 DB 모듈 회귀 테스트 (accounts/reels/reel_metrics/shot_segments/
+reel_analyses/guides) + collect.run()/score.run()/diagnose.run() 엔드투엔드(fake 모드).
 
-frames.run()/analyze.run()은 여기서 다루지 않는다 — 실제 mp4 다운로드(네트워크)와
-VLM 호출이 필요해서, 로컬 HTTP 서버·비디오 fixture 없이는 자동화하기 어렵다.
-`.env`의 VISION_MODE가 G2 확정 이후 real이라 get_vision_provider()를 통하면
-실제 Claude 과금이 발생할 위험도 있다 — 이번 세션에서 수동 스크립트로 각각
+frames.run()/analyze.run()의 다운로드+VLM 경로는 여기서 다루지 않는다 — 실제 mp4
+다운로드(네트워크)와 VLM 호출이 필요해서, 로컬 HTTP 서버·비디오 fixture 없이는
+자동화하기 어렵다. `.env`의 VISION_MODE가 G2 확정 이후 real이라 get_vision_provider()를
+통하면 실제 Claude 과금이 발생할 위험도 있다 — 이번 세션에서 수동 스크립트로 각각
 실측 검증은 했음(SESSION_LOG.md 참조), 자동 테스트는 별도 인프라 필요로 보류.
+diagnose.run()도 fixture의 my_reel.video_url이 null이라 같은 이유로 다운로드 이후
+경로(frames/VLM)는 커버 못 한다 — is_my_reel 커밋/풀 제외 여부만 확인한다.
+analyze.run()의 진행률 갱신(update_progress)만은 select_target_reels/process_reel을
+mock해서 다운로드·VLM 없이 검증한다.
 """
 
 from datetime import UTC, date, datetime, timedelta
+from unittest.mock import AsyncMock
 
 from psycopg.rows import dict_row
 
 from app.db import accounts as accounts_db
+from app.db import bucket_configs as bucket_configs_db
 from app.db import guides as guides_db
 from app.db import jobs as jobs_db
 from app.db import reel_analyses as reel_analyses_db
@@ -20,7 +26,7 @@ from app.db import reel_metrics as reel_metrics_db
 from app.db import reels as reels_db
 from app.db import shot_segments as shot_segments_db
 from app.db.connection import get_conn
-from app.pipeline import collect, compare, score
+from app.pipeline import analyze, collect, compare, diagnose, score
 from app.pipeline.score import build_scored_reel
 from app.schemas.analyze import VisionShotDescription
 from app.schemas.collect import Account, RawReel
@@ -83,6 +89,26 @@ async def test_reels_upsert_and_query_by_keyword(clean_pipeline_tables):
     assert found[0].hashtags == ["#테스트"]
 
     assert await reels_db.get_by_keyword("다른키워드", "업종") == []
+
+
+@requires_db
+async def test_reels_my_reel_excluded_from_keyword_pool(clean_pipeline_tables):
+    """P5: is_my_reel=true 행은 get_by_keyword()가 항상 제외해야 한다
+    (안 그러면 버킷 분류·대조 분석 표본이 오염된다)."""
+    await accounts_db.upsert_many([_account(), _account(username="my_cafe")])
+    pool_reel = _reel()
+    my_reel = _reel(code="_t_myreel", username="my_cafe")
+    await reels_db.upsert_many([pool_reel], keyword="키워드", business_type="업종")
+    await reels_db.upsert_many(
+        [my_reel], keyword="키워드", business_type="업종", is_my_reel=True
+    )
+
+    found = await reels_db.get_by_keyword("키워드", "업종")
+    assert [r.code for r in found] == [pool_reel.code]
+
+    fetched_my_reel = await reels_db.get_my_reel("키워드", "업종")
+    assert fetched_my_reel is not None
+    assert fetched_my_reel.code == "_t_myreel"
 
 
 @requires_db
@@ -244,3 +270,133 @@ async def test_guides_create_and_get_latest_by_job(clean_pipeline_tables):
 
     other_job = await jobs_db.create_job(req)
     assert await guides_db.get_latest_by_job(other_job.id) is None
+
+
+@requires_db
+async def test_bucket_configs_get_boundaries_falls_back_to_global_default(clean_pipeline_tables):
+    boundaries = await bucket_configs_db.get_boundaries("_t_업종_없음")
+    # 0001 마이그레이션이 심어둔 전역 기본값(business_type IS NULL, source='fixed').
+    assert boundaries == {"B1": 1000, "B2": 10000, "B3": 100000}
+
+
+@requires_db
+async def test_bucket_configs_save_and_get_percentile_boundaries(clean_pipeline_tables):
+    business_type = "_t_분위수업종"
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "DELETE FROM bucket_configs WHERE business_type = %s", (business_type,)
+            )
+        await conn.commit()
+
+    await bucket_configs_db.save_percentile_boundaries(
+        business_type, {"B1": 300, "B2": 3000, "B3": 100000}, sample_size=250
+    )
+    boundaries = await bucket_configs_db.get_boundaries(business_type)
+    assert boundaries == {"B1": 300, "B2": 3000, "B3": 100000}
+
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "DELETE FROM bucket_configs WHERE business_type = %s", (business_type,)
+            )
+        await conn.commit()
+
+
+@requires_db
+async def test_resolve_bucket_boundaries_switches_to_percentile_past_threshold(
+    clean_pipeline_tables,
+):
+    """docs/02-contracts.md: 업종 누적 200건 초과 시 33/66 분위수로 교체."""
+    business_type = "_t_percentile_biz"
+    accounts = [_account(username=f"_t_pb_{i}", follower_count=(i + 1) * 100) for i in range(30)]
+    await accounts_db.upsert_many(accounts)
+
+    reels = [
+        _reel(code=f"_t_pb_reel_{i}", username=f"_t_pb_{i % 30}") for i in range(210)
+    ]
+    await reels_db.upsert_many(reels, keyword="아무키워드", business_type=business_type)
+
+    boundaries = await score.resolve_bucket_boundaries(business_type)
+
+    assert boundaries != {"B1": 1000, "B2": 10000, "B3": 100000}
+    assert boundaries["B1"] < boundaries["B2"]
+    assert boundaries["B3"] == 100_000  # B3는 분위수로 안 바뀌고 고정(판단, score.py 참조)
+
+    # 이력으로 저장까지 됐는지 확인 — 이후 compute_tracks()가 이 값을 읽어야 한다.
+    saved = await bucket_configs_db.get_boundaries(business_type)
+    assert saved == boundaries
+
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "DELETE FROM bucket_configs WHERE business_type = %s", (business_type,)
+            )
+        await conn.commit()
+
+
+@requires_db
+async def test_resolve_bucket_boundaries_stays_fixed_under_threshold(clean_pipeline_tables):
+    business_type = "_t_small_biz"
+    await accounts_db.upsert_many([_account()])
+    await reels_db.upsert_many([_reel()], keyword="키워드", business_type=business_type)
+
+    boundaries = await score.resolve_bucket_boundaries(business_type)
+
+    assert boundaries == {"B1": 1000, "B2": 10000, "B3": 100000}
+
+
+@requires_db
+async def test_analyze_run_updates_progress_per_reel(clean_pipeline_tables, monkeypatch):
+    """docs/05-api.md·07-ui.md: analyzing은 "7/20" 형태 개별 진행을 노출해야 하는데
+    `jobs_db.update_progress()`가 어느 파이프라인 모듈에서도 호출된 적이 없었다
+    (발견, 2026-08-18). 프레임/VLM 의존 없이 진행률 갱신 자체만 검증한다."""
+    req = AnalysisRequest(
+        keyword="성수동카페", business_type="카페", constraints=UserConstraints()
+    )
+    job = await jobs_db.create_job(req)
+
+    reels = [_reel(code=f"_t_progress_{i}") for i in range(3)]
+    monkeypatch.setattr(analyze, "select_target_reels", AsyncMock(return_value=reels))
+    monkeypatch.setattr(analyze, "process_reel", AsyncMock(return_value=None))
+
+    await analyze.run(str(job.id))
+
+    updated = await jobs_db.get_job(job.id)
+    assert updated is not None
+    assert updated.progress_current == 3
+    assert updated.progress_total == 3
+
+
+@requires_db
+async def test_diagnose_run_noop_when_no_my_reel_url(clean_pipeline_tables):
+    req = AnalysisRequest(
+        keyword="성수동카페", business_type="카페", constraints=UserConstraints()
+    )
+    job = await jobs_db.create_job(req)
+
+    await diagnose.run(str(job.id))
+
+    assert await reels_db.get_my_reel("성수동카페", "카페") is None
+
+
+@requires_db
+async def test_diagnose_run_fake_mode_commits_my_reel(clean_pipeline_tables):
+    """fake 모드(APIFY_MODE=fake)로 diagnose.run()이 fixtures/collect/sample.json의
+    "my_reel"을 `is_my_reel=true`로 커밋하는지 확인한다. fixture의 video_url이 null이라
+    frames.process_reel은 다운로드 없이 스킵한다(실 mp4/VLM 없이 자동화하기 위한 한계 —
+    파일 상단 설명과 동일한 이유)."""
+    req = AnalysisRequest(
+        keyword="성수동카페", business_type="카페", constraints=UserConstraints(),
+        my_reel_url="https://instagram.com/reel/Cmyreel1",
+    )
+    job = await jobs_db.create_job(req)
+
+    await diagnose.run(str(job.id))
+
+    my_reel = await reels_db.get_my_reel("성수동카페", "카페")
+    assert my_reel is not None
+    assert my_reel.code == "Cmyreel1"
+    assert my_reel.username == "my_cafe"
+    # 키워드 풀 조회에서는 여전히 제외돼야 한다.
+    assert my_reel.code not in [r.code for r in await reels_db.get_by_keyword("성수동카페", "카페")]

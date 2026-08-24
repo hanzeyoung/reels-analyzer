@@ -1,4 +1,5 @@
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,8 @@ from app.schemas.common import Confidence
 from app.schemas.compare import ComparisonResult
 from app.schemas.guide import Guide
 from app.schemas.requests import UserConstraints
+
+logger = logging.getLogger(__name__)
 
 # P4 판단(2026-08-14): vision과 같은 이유로 sonnet-5 — 이 호출도 잡 1건당 1회지만
 # 반복 실행되는 배치성 작업이라 opus 대신 비용 효율 우선. 필요하면 나중에 품질 보고 올린다.
@@ -38,6 +41,7 @@ class ClaudeWriterProvider(WriterProvider):
         big_account: list[ReelAnalysis],
         constraints: UserConstraints,
         confidence: Confidence,
+        my_reel: ReelAnalysis | None = None,
     ) -> Guide:
         prompt = load_prompt("guide_writer")
         user_text = render_user_prompt(
@@ -48,6 +52,7 @@ class ClaudeWriterProvider(WriterProvider):
             big_account=big_account,
             constraints=constraints,
             confidence=confidence,
+            my_reel=my_reel,
         )
 
         last_error: Exception | None = None
@@ -63,6 +68,11 @@ class ClaudeWriterProvider(WriterProvider):
                 system=prompt.system,
                 output_config=output_config,
                 messages=messages,
+            )
+            logger.info(
+                "ClaudeWriterProvider 사용량: input_tokens=%d, output_tokens=%d",
+                response.usage.input_tokens,
+                response.usage.output_tokens,
             )
             text = next(block.text for block in response.content if block.type == "text")
             try:
@@ -91,6 +101,7 @@ class FakeWriterProvider(WriterProvider):
         big_account: list[ReelAnalysis],
         constraints: UserConstraints,
         confidence: Confidence,
+        my_reel: ReelAnalysis | None = None,
     ) -> Guide:
         payload = json.loads((self._fixtures_dir / "writer" / "sample.json").read_text())
         guide = Guide.model_validate(payload)

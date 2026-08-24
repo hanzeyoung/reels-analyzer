@@ -20,7 +20,7 @@ class RawReel(BaseModel):
     taken_at: datetime
 
     play_count: int = 0
-    like_count: int = 0
+    like_count: int | None = None  # None = "모른다"(좋아요 비공개 계정). 0으로 채우지 마라
     comment_count: int = 0
     share_count: int = 0
 

@@ -29,7 +29,9 @@ def _frame_dir(job_id: str, reel_code: str) -> Path:
     return Path(tempfile.gettempdir()) / "buja_frames" / job_id / reel_code
 
 
-async def _process_reel(reel: RawReel, job_id: str) -> None:
+async def process_reel(reel: RawReel, job_id: str) -> None:
+    """공개 함수(원래 `_process_reel`) — P5 `diagnose.py`가 내 릴스 1건에도 동일 로직을
+    그대로 재사용한다(score.select_target_reels 공개화와 같은 이유)."""
     pending = await shot_segments_db.get_pending(reel.code)
     if not pending:
         logger.info("릴스 %s는 분석할 shot 없음(이미 완료됐거나 preparing 실패) — 스킵", reel.code)
@@ -87,8 +89,15 @@ async def run(job_id: str) -> None:
     targets = await select_target_reels(keyword, business_type)
     logger.info("job %s analyzing 대상 %d개", job_id, len(targets))
 
-    for reel in targets:
+    # docs/05-api.md·07-ui.md: analyzing 단계는 "7/20" 형태 개별 진행을 보여줘야 하는데
+    # `jobs_db.update_progress()`가 P0부터 있었지만 어느 파이프라인 모듈도 호출한 적이
+    # 없었다(발견, 2026-08-18) — 릴스 1개 처리할 때마다 갱신한다.
+    total = len(targets)
+    await jobs_db.update_progress(job.id, 0, total)
+    for i, reel in enumerate(targets, start=1):
         try:
-            await _process_reel(reel, job_id)
+            await process_reel(reel, job_id)
         except Exception:  # noqa: BLE001 — 릴스 1개 실패가 전체를 막으면 안 된다 (docs 실패 원칙)
             logger.exception("릴스 %s 분석 실패 — 로그만 남기고 계속", reel.code)
+        finally:
+            await jobs_db.update_progress(job.id, i, total)

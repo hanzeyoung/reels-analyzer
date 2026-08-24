@@ -19,11 +19,11 @@ from datetime import datetime, date
 from uuid import UUID
 
 Bucket = Literal["B1", "B2", "B3", "B4", "unknown"]
-Track  = Literal["breakout", "big_account", "control"]
+Track  = Literal["breakout", "big_account", "control", "my_reel"]  # my_reel: P5, 풀 비교에는 안 씀
 
 JobStatus = Literal["queued", "running", "done", "failed"]
 JobStage  = Literal["collecting", "scoring", "preparing",
-                    "analyzing", "comparing", "generating"]
+                    "analyzing", "comparing", "diagnosing", "generating"]
 
 Movement   = Literal["고정", "패닝", "줌", "따라가기", "핸드헬드"]
 ShotPurpose = Literal["후킹", "정보", "전환", "마무리", "CTA"]
@@ -81,10 +81,14 @@ class RawReel(BaseModel):
     taken_at: datetime
 
     play_count: int = 0
-    like_count: int = 0
+    like_count: int | None = None   # None = "모른다"(좋아요 비공개 계정). 0으로 채우지 마라
     comment_count: int = 0
     share_count: int = 0
-    # save_count 없음 — Apify가 제공하지 않는다. share가 그 역할을 대신한다.
+    # save_count 없음 — Apify가 제공하지 않는다.
+    # share_count도 실측(2026-08-24)으로 항상 0으로 확인됨 — Apify가 좋아요 비공개
+    # 계정 좋아요수(-1)만 우리가 감지해서 None 처리하고, share/save 자체는 액터가
+    # 아예 안 준다(공식 문서 샘플에도 없음). "share가 저장수 역할을 대신한다"는 원래
+    # 가정이 틀렸다 — 계산에는 영향 없다(항상 0을 더하는 것뿐), 문서만 정정.
 
 
 class Account(BaseModel):

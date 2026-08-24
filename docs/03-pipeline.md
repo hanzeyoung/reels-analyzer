@@ -122,11 +122,34 @@
 
 ---
 
+## diagnosing (P5)
+
+| | |
+|---|---|
+| 입력 | `AnalysisRequest.my_reel_url` |
+| 출력 | 내 릴스의 `ReelAnalysis` (`track="my_reel"`) |
+| 커밋 | `reels`(`is_my_reel=true`) + `shot_segments` + `reel_analyses` |
+
+`my_reel_url`이 `None`이면 즉시 스킵한다(진단 카드 없이 진행).
+
+1. Apify로 URL 하나만 조회(`CollectProvider.fetch_reel_by_url`) → `RawReel`
+2. `reels`에 `is_my_reel=true`로 upsert — 키워드 풀 조회(`get_by_keyword`)에서 항상
+   제외되므로 버킷 분류·대조 분석 표본을 오염시키지 않는다
+3. `preparing`/`analyzing`과 동일한 로직(`frames.process_reel`/`analyze.process_reel`
+   재사용)으로 컷 분해 + VLM 샷 서술
+4. 실패(포스트 삭제/비공개, 다운로드 실패 등)해도 잡 전체를 막지 않는다 — 로그만 남기고
+   진단 카드 없이 진행(실패 원칙과 동일)
+
+`comparing`과 순서상 독립적이지만(내 릴스 분석은 풀 비교와 무관), `generating`이 벤치마크로
+쓸 `ComparisonResult.timing`이 먼저 있어야 하므로 `comparing` 다음, `generating` 직전에 둔다.
+
+---
+
 ## generating
 
 | | |
 |---|---|
-| 입력 | `ComparisonResult`, `ReelPool`, `UserConstraints`, `confidence`(코드가 계산) |
+| 입력 | `ComparisonResult`, `ReelPool`, `UserConstraints`, `confidence`(코드가 계산), 내 릴스 `ReelAnalysis`(있으면) |
 | 출력 | `Guide` |
 | 커밋 | `guides` |
 
@@ -139,9 +162,12 @@
      대안이 없으면 제외
    - `can_show_face=False` → 인물 얼굴이 주 피사체인 샷 제외
    - `equipment`에 없는 장비를 요구하는 샷 제외
-2. Claude 호출 (`docs/04-prompts.md`)
-3. 반환 JSON을 `Guide`로 검증. 실패 시 1회 재시도
-4. `confidence` 값 자체는 **코드에서 계산한 값을 그대로 덮어쓴다.** 모델 출력의 confidence는 신뢰하지 않는다
+2. 내 릴스 `ReelAnalysis`가 있으면 컷 수/평균 샷 길이/첫 컷 길이를 `ComparisonResult.timing`
+   (breakout 평균, 벤치마크)과 함께 `{my_reel_block}`에 채운다. 없으면 그 블록 자체를
+   프롬프트에서 제거(`diagnosis`는 빈 리스트로 남는다)
+3. Claude 호출 (`docs/04-prompts.md`)
+4. 반환 JSON을 `Guide`로 검증. 실패 시 1회 재시도
+5. `confidence` 값 자체는 **코드에서 계산한 값을 그대로 덮어쓴다.** 모델 출력의 confidence는 신뢰하지 않는다
 
 ---
 

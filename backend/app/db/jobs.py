@@ -65,7 +65,17 @@ async def list_jobs(limit: int = 20) -> list[Job]:
 
 
 async def claim_next_queued_job() -> Job | None:
-    """queued 잡 하나를 running으로 바꾸며 집는다. attempts를 1 증가시킨다 (G0 C-2)."""
+    """queued 잡 하나를 running으로 바꾸며 집는다. attempts를 1 증가시킨다 (G0 C-2).
+
+    `created_at`만으로 정렬하면 같은 마이크로초에 생성된 두 잡의 클레임 순서가
+    이론상 비결정적일 수 있어(id가 랜덤 UUID) `id`를 2차 정렬 키로 추가했다(2026-08-20).
+    **주의**: `tests/worker/test_loop.py`가 이전에 flaky했던 진짜 원인은 이게 아니었다 —
+    같은 원격 Supabase DB를 폴링하는 실제 워커 프로세스(`make dev`)가 백그라운드에서
+    계속 살아있는 상태로 pytest를 돌리면, 테스트가 만든 job을 그 워커가 가로채 처리해버려
+    결과가 매번 달라졌다(실측으로 원인 특정, `make dev` 종료 후 3회 연속 통과 확인).
+    **`make check`/pytest는 `make dev`가 안 떠 있는 상태에서 돌려야 한다** — 테스트가
+    별도 DB로 격리돼 있지 않고 실제 개발 DB를 그대로 쓰기 때문.
+    """
     async with get_conn() as conn:
         async with conn.cursor(row_factory=dict_row) as cur:
             await cur.execute(
@@ -74,7 +84,7 @@ async def claim_next_queued_job() -> Job | None:
                                 attempts = attempts + 1
                 WHERE id = (
                     SELECT id FROM jobs WHERE status = 'queued'
-                    ORDER BY created_at ASC
+                    ORDER BY created_at ASC, id ASC
                     FOR UPDATE SKIP LOCKED
                     LIMIT 1
                 )

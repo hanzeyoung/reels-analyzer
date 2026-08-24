@@ -24,6 +24,13 @@ class CollectProvider(ABC):
         책임이다 — provider는 DB를 모른다.
         """
 
+    @abstractmethod
+    async def fetch_reel_by_url(self, url: str) -> RawReel | None:
+        """P5(내 릴스 진단): URL 하나로 릴스 원본 1건을 조회한다.
+
+        포스트가 삭제/비공개거나 영상이 아니면 None(호출부가 로그만 남기고 스킵한다).
+        """
+
 
 class VisionProvider(ABC):
     @abstractmethod
@@ -43,8 +50,12 @@ class WriterProvider(ABC):
         big_account: list[ReelAnalysis],
         constraints: UserConstraints,
         confidence: Confidence,
+        my_reel: ReelAnalysis | None = None,
     ) -> Guide:
         """대조 결과 + 트랙별 릴스 분석으로 최종 가이드를 작성한다.
+
+        `my_reel`(P5)이 있으면 `{my_reel_block}`을 채워 `diagnosis` 카드를 생성하게 하고,
+        없으면 그 블록 자체를 프롬프트에서 제거한다(`diagnosis`는 빈 리스트로 남는다).
 
         원래 문서 주석은 `pool: ReelPool`을 받는 것으로 돼 있었으나, `ReelPool`의
         collected_count/after_recency_count 등 집계 필드는 P1에서 어디에도 저장되지

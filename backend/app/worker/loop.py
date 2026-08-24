@@ -1,11 +1,14 @@
 """워커 프로세스 본체. queued 잡을 집어 저장된 stage부터 순서대로 실행한다.
 
-모듈명(collect/score/frames/analyze/compare/guide) ↔ JobStage 매핑
+모듈명(collect/score/frames/analyze/compare/diagnose/guide) ↔ JobStage 매핑
 (G0 A-1: 원래 downloading 하나로 묶여 있던 것을 계약 충돌로 재정의):
-    collect.py -> collecting   score.py  -> scoring
+    collect.py -> collecting   score.py   -> scoring
     frames.py  -> preparing    (mp4 다운로드 + ffmpeg 컷 추출, 로컬·결정론적)
     analyze.py -> analyzing    (VLM 호출, 과금·비결정론적)
-    compare.py -> comparing    guide.py  -> generating
+    compare.py -> comparing    diagnose.py -> diagnosing (P5, 내 릴스 진단 — my_reel_url
+                                없으면 즉시 스킵. comparing과는 순서상 독립적이지만
+                                generating이 쓸 데이터라 그 직전에 둔다)
+    guide.py   -> generating
 """
 
 import asyncio
@@ -13,13 +16,14 @@ import contextlib
 import logging
 import os
 import socket
+import time
 from types import ModuleType
 from uuid import UUID
 
 from app.db import guides as guides_db
 from app.db import jobs as jobs_db
 from app.db import workers as workers_db
-from app.pipeline import analyze, collect, compare, frames, guide, score
+from app.pipeline import analyze, collect, compare, diagnose, frames, guide, score
 from app.schemas.common import JobStage
 from app.schemas.job import Job
 
@@ -33,6 +37,7 @@ STAGE_MODULES: list[tuple[JobStage, ModuleType]] = [
     ("preparing", frames),
     ("analyzing", analyze),
     ("comparing", compare),
+    ("diagnosing", diagnose),
     ("generating", guide),
 ]
 
@@ -65,7 +70,11 @@ async def process_job(job: Job, heartbeat_interval: float = HEARTBEAT_INTERVAL_S
     try:
         for stage, module in STAGE_MODULES[_resume_index(job) :]:
             await jobs_db.set_stage(job.id, stage)
+            t0 = time.monotonic()
             await module.run(str(job.id))
+            logger.info(
+                "job %s stage=%s 소요 %.1fs", job.id, stage, time.monotonic() - t0
+            )
         # guide.run()(generating)이 `guides` 테이블에 커밋한 걸 다시 읽어서 jobs.result에
         # 채운다 — pipeline 모듈은 job_id만 받고 값을 반환하지 않는 기존 관례를 그대로
         # 지키면서(P0부터 일관됨), 최종 결과를 jobs에 붙이는 책임은 오케스트레이터인

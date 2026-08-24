@@ -1,5 +1,6 @@
 import base64
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,8 @@ from pydantic import BaseModel
 from app.prompts import load_prompt
 from app.providers.base import VisionProvider
 from app.schemas.analyze import VisionAnalysis
+
+logger = logging.getLogger(__name__)
 
 # P2 T-2.3 판단(2026-08-14): opus-5 대신 sonnet-5 — 이 호출은 릴스마다(잠재적으로 수백 건)
 # 반복되는 배치성 추출 작업이라 비용이 누적된다. sonnet-5도 고해상도 비전(2576px)·structured
@@ -95,6 +98,11 @@ class ClaudeVisionProvider(VisionProvider):
             system=prompt.system,
             output_config=output_config,
             messages=messages,
+        )
+        logger.info(
+            "ClaudeVisionProvider 사용량: input_tokens=%d, output_tokens=%d",
+            response.usage.input_tokens,
+            response.usage.output_tokens,
         )
         text = next(block.text for block in response.content if block.type == "text")
         return VisionAnalysis.model_validate_json(text)

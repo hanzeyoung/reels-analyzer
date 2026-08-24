@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 
-from app.providers.collect import APIFY_MAX_ATTEMPTS, ApifyCollectProvider
+from app.providers.collect import APIFY_MAX_ATTEMPTS, ApifyCollectProvider, FakeCollectProvider
 
 
 class _FakeResponse:
@@ -72,3 +72,53 @@ async def test_run_raises_after_max_attempts(monkeypatch: pytest.MonkeyPatch) ->
         await provider._run({"search": "test"})
 
     assert state["calls"] == APIFY_MAX_ATTEMPTS
+
+
+async def test_fetch_reel_by_url_parses_post_item(monkeypatch: pytest.MonkeyPatch) -> None:
+    """P5(내 릴스 진단). directUrls+resultsType=posts 응답 구조 실측(2026-08-18) 기준
+    — 해시태그 검색 아이템과 필드가 동일해서 같은 파싱 헬퍼를 재사용한다."""
+    item = {
+        "type": "Video",
+        "shortCode": "Cmyreel1",
+        "url": "https://www.instagram.com/p/Cmyreel1/",
+        "ownerUsername": "my_cafe",
+        "caption": "우리 카페 신메뉴",
+        "videoUrl": "https://cdn.example.com/my.mp4",
+        "videoPlayCount": 500,
+        "likesCount": 30,
+        "commentsCount": 2,
+        "timestamp": "2026-08-10T09:00:00",
+        "musicInfo": None,
+        "displayUrl": None,
+        "videoDuration": 15.0,
+    }
+    provider = ApifyCollectProvider(token="test-token")
+    monkeypatch.setattr(provider, "_run", AsyncMock(return_value=[item]))
+
+    reel = await provider.fetch_reel_by_url("https://www.instagram.com/p/Cmyreel1/")
+
+    assert reel is not None
+    assert reel.code == "Cmyreel1"
+    assert reel.username == "my_cafe"
+    assert reel.video_url == "https://cdn.example.com/my.mp4"
+    assert reel.play_count == 500
+
+
+async def test_fetch_reel_by_url_returns_none_when_not_found(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = ApifyCollectProvider(token="test-token")
+    monkeypatch.setattr(provider, "_run", AsyncMock(return_value=[]))
+
+    assert await provider.fetch_reel_by_url("https://www.instagram.com/p/Deleted/") is None
+
+
+async def test_fake_collect_provider_fetch_reel_by_url_returns_fixture() -> None:
+    from app.config import get_settings
+
+    provider = FakeCollectProvider(fixtures_dir=get_settings().fixtures_dir)
+
+    reel = await provider.fetch_reel_by_url("아무 URL이나 무시됨")
+
+    assert reel is not None
+    assert reel.code == "Cmyreel1"

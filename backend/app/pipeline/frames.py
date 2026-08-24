@@ -114,7 +114,9 @@ def dedupe_by_phash(
     return kept[:max_frames]
 
 
-async def _process_reel(reel: RawReel, job_id: str) -> None:
+async def process_reel(reel: RawReel, job_id: str) -> None:
+    """공개 함수(원래 `_process_reel`) — P5 `diagnose.py`가 내 릴스 1건에도 동일 로직을
+    그대로 재사용한다(score.select_target_reels 공개화와 같은 이유)."""
     if await shot_segments_db.has_any(reel.code):
         logger.info("릴스 %s는 이미 shot_segments 있음 — 다운로드 건너뜀", reel.code)
         return
@@ -156,6 +158,6 @@ async def run(job_id: str) -> None:
 
     for reel in targets:
         try:
-            await _process_reel(reel, job_id)
+            await process_reel(reel, job_id)
         except Exception:  # noqa: BLE001 — 릴스 1개 실패가 전체를 막으면 안 된다 (docs 실패 원칙)
             logger.exception("릴스 %s 처리 실패 — 로그만 남기고 계속", reel.code)

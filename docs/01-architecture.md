@@ -69,7 +69,13 @@ heartbeat_at 만료 → queued 로 복귀 (stale 복구)
 | `VisionProvider` | Claude (기본) / Gemini(자리만) | `fixtures/` 읽기 |
 | `WriterProvider` | Claude | `fixtures/` 읽기 |
 
-`APIFY_MODE` / `VISION_MODE` / `WRITER_MODE` = `fake` | `real`. **기본은 fake.**
+`APIFY_MODE` / `VISION_MODE` / `WRITER_MODE` = `fake` | `real`. **기본은 fake, 항상 fake로
+유지한다.** `.env` 파일 자체를 real로 손으로 고치지 않는다 — `make dev`(운영)와
+`pytest`(테스트)가 같은 `.env`를 공유해서, 손으로 바꿔놓으면 되돌리는 걸 잊는 순간
+테스트가 실제 API를 호출해버린다(실제로 겪은 사고, P6.5 2026-08-24). 실측(real API로
+직접 확인)이 필요하면 `backend/scripts/real_mode.sh` 진입점을 통해서만 하라 — `.env`는
+안 건드리고 그 명령의 프로세스에만 real 환경변수를 준다. `pytest`는 `tests/conftest.py`의
+`pytest_configure`가 세 MODE 중 하나라도 real이면 세션 자체를 실패시킨다(구조적 가드).
 
 fixture는 손으로 쓰지 않는다. **P1에서 실제 응답을 캡처해서 박제한다.**
 상상으로 만든 fixture 위에 개발하면 실키 전환 때 계약이 깨진다.

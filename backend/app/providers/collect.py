@@ -4,6 +4,7 @@ import logging
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
+from urllib.parse import quote
 
 import httpx
 
@@ -58,48 +59,73 @@ class ApifyCollectProvider(CollectProvider):
         assert last_exc is not None
         raise last_exc
 
+    def _item_to_raw_reel(self, item: dict[str, Any]) -> RawReel | None:
+        video_url = item.get("videoUrl")
+        # docs/03-pipeline.md collect 2번: is_video=True and video_url 존재하는 것만.
+        # Apify 응답엔 is_video 필드가 없어 type=="Video" + videoUrl 존재로 판정한다.
+        if item.get("type") != "Video" or not video_url:
+            return None
+        caption = item.get("caption") or ""
+        # P6.5 실측(2026-08-24): 좋아요 비공개 계정은 likesCount가 -1로 온다. 0으로
+        # 뭉개면 "좋아요 0개인 저성과 릴스"로 오인돼 engagement_rate가 왜곡되고 control
+        # 그룹에 인위적으로 쏠린다 — None("모른다")으로 정규화한다.
+        raw_likes = item.get("likesCount")
+        like_count = raw_likes if raw_likes is not None and raw_likes >= 0 else None
+        return RawReel(
+            code=item["shortCode"],
+            url=item["url"],
+            username=item["ownerUsername"],
+            caption=caption,
+            hashtags=extract_hashtags(caption),
+            audio_title=(item.get("musicInfo") or {}).get("song_name"),
+            video_url=video_url,
+            thumbnail_url=item.get("displayUrl"),
+            duration_sec=item.get("videoDuration"),
+            taken_at=item["timestamp"],
+            play_count=item.get("videoPlayCount") or item.get("videoViewCount") or 0,
+            like_count=like_count,
+            comment_count=item.get("commentsCount") or 0,
+        )
+
     async def collect_reels(self, keyword: str, business_type: str) -> list[RawReel]:
         # Instagram 해시태그는 공백을 허용하지 않는다 — 복합어 키워드는 붙여서 검색하고,
         # 실제 관련성 판단은 app.pipeline.collect.is_relevant(어절 단위)가 나중에 맡는다.
-        tag = keyword.replace(" ", "")
-        search = tag if tag.startswith("#") else f"#{tag}"
+        #
+        # P6.5 실측(2026-08-24)으로 확인한 버그: `search`+`searchType=hashtag`는 게시물이
+        # 아니라 해시태그 "리서치"(퍼지 매칭으로 관련 해시태그를 찾는 기능)를 반환한다 —
+        # 한글 해시태그에서는 완전히 무관한 해시태그로 매칭돼 원본 수집이 0건이 됐다.
+        # Apify 공식 문서가 권장하는 `directUrls`(explore/tags) 방식으로 교체한다 —
+        # 퍼지 매칭 없이 결정론적으로 해당 해시태그의 게시물만 가져온다.
+        tag = keyword.replace(" ", "").removeprefix("#")
+        tag_url = f"https://www.instagram.com/explore/tags/{quote(tag, safe='')}/"
 
+        # `resultsType="posts"`는 해시태그의 일반 게시물 그리드(사진 위주)를 반환한다 —
+        # 실측(2026-08-24)으로 27건 중 Video 0건을 확인했다. 공식 input schema에 릴스
+        # 전용 값 `"reels"`가 따로 있고, 8건 최소비용 재시도로 8/8 전부 Video+videoUrl
+        # 확인함 — 이걸로 교체한다.
         items = await self._run(
             {
-                "search": search,
-                "searchType": "hashtag",
-                "searchLimit": 1,
-                "resultsType": "posts",
+                "directUrls": [tag_url],
+                "resultsType": "reels",
                 "resultsLimit": REELS_PER_KEYWORD,
             }
         )
-
-        reels: list[RawReel] = []
-        for item in items:
-            video_url = item.get("videoUrl")
-            # docs/03-pipeline.md collect 2번: is_video=True and video_url 존재하는 것만.
-            # Apify 응답엔 is_video 필드가 없어 type=="Video" + videoUrl 존재로 판정한다.
-            if item.get("type") != "Video" or not video_url:
-                continue
-            caption = item.get("caption") or ""
-            reels.append(
-                RawReel(
-                    code=item["shortCode"],
-                    url=item["url"],
-                    username=item["ownerUsername"],
-                    caption=caption,
-                    hashtags=extract_hashtags(caption),
-                    audio_title=(item.get("musicInfo") or {}).get("song_name"),
-                    video_url=video_url,
-                    thumbnail_url=item.get("displayUrl"),
-                    duration_sec=item.get("videoDuration"),
-                    taken_at=item["timestamp"],
-                    play_count=item.get("videoPlayCount") or item.get("videoViewCount") or 0,
-                    like_count=item.get("likesCount") or 0,
-                    comment_count=item.get("commentsCount") or 0,
-                )
-            )
+        reels = [reel for item in items if (reel := self._item_to_raw_reel(item)) is not None]
+        logger.info(
+            "Apify 원본 %d건 수신, type==Video+videoUrl 통과 %d건", len(items), len(reels)
+        )
         return reels
+
+    async def fetch_reel_by_url(self, url: str) -> RawReel | None:
+        # P5(내 릴스 진단). directUrls + resultsType=posts로 단일 포스트 URL 조회 —
+        # 실측(2026-08-18)으로 해시태그 검색과 동일한 아이템 구조(shortCode/ownerUsername/
+        # videoUrl/videoPlayCount 등)가 나오는 것 확인. 같은 파싱 헬퍼를 그대로 쓴다.
+        items = await self._run(
+            {"directUrls": [url], "resultsType": "posts", "resultsLimit": 1}
+        )
+        if not items:
+            return None
+        return self._item_to_raw_reel(items[0])
 
     async def fetch_accounts(self, usernames: list[str]) -> list[Account]:
         if not usernames:
@@ -137,3 +163,8 @@ class FakeCollectProvider(CollectProvider):
         payload = self._load()
         accounts = [Account.model_validate(a) for a in payload["accounts"]]
         return [a for a in accounts if a.username in usernames]
+
+    async def fetch_reel_by_url(self, url: str) -> RawReel | None:
+        payload = self._load()
+        my_reel = payload.get("my_reel")
+        return RawReel.model_validate(my_reel) if my_reel else None

@@ -10,7 +10,7 @@
       "video_url": null,
       "thumbnail_url": null,
       "duration_sec": 18.0,
-      "taken_at": "2026-07-20T09:00:00",
+      "taken_at": "2026-08-12T09:00:00",
       "play_count": 12000,
       "like_count": 800,
       "comment_count": 40,
@@ -23,5 +23,21 @@
       "follower_count": 3200,
       "fetched_at": "2026-08-01T00:00:00"
     }
-  ]
+  ],
+  "my_reel": {
+    "code": "Cmyreel1",
+    "url": "https://instagram.com/reel/Cmyreel1",
+    "username": "my_cafe",
+    "caption": "우리 카페 신메뉴 소개",
+    "hashtags": [],
+    "audio_title": "my sound",
+    "video_url": null,
+    "thumbnail_url": null,
+    "duration_sec": 15.0,
+    "taken_at": "2026-08-10T09:00:00",
+    "play_count": 500,
+    "like_count": 30,
+    "comment_count": 2,
+    "share_count": 1
+  }
 }

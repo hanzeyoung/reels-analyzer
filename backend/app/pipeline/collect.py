@@ -5,6 +5,7 @@
 (G0 지시서 4단계 — DB도 필요 없다).
 """
 
+import logging
 import re
 from datetime import UTC, datetime, timedelta
 from difflib import SequenceMatcher
@@ -14,6 +15,8 @@ from app.db import accounts as accounts_db
 from app.db import jobs as jobs_db
 from app.db import reels as reels_db
 from app.schemas.collect import Account, RawReel
+
+logger = logging.getLogger(__name__)
 
 _HASHTAG_RE = re.compile(r"#(\w+)")
 
@@ -122,3 +125,8 @@ async def run(job_id: str) -> None:
         await accounts_db.upsert_many(unresolved)
 
     await reels_db.upsert_many(deduped, keyword=keyword, business_type=business_type)
+    logger.info(
+        "job %s 수집 깔때기: 원본=%d, 30일필터=%d, 관련성필터=%d, 중복제거=%d, "
+        "계정조회(캐시히트=%d, 신규조회=%d)",
+        job_id, len(raw), len(recent), len(relevant), len(deduped), len(cached), len(missing),
+    )

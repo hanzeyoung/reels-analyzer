@@ -145,10 +145,11 @@ def build_comparison_result(
     )
 
 
-async def build_reel_analysis(scored: ScoredReel, track: Track) -> ReelAnalysis | None:
+async def _build_reel_analysis(
+    reel_code: str, track: Track, bucket: Bucket, audio_title: str | None
+) -> ReelAnalysis | None:
     """reel_analyses + shot_segments를 조인해서 `ReelAnalysis`를 재구성한다.
     analyzing이 아직 안 끝났거나 실패한 릴스는 None(호출부가 제외한다)."""
-    reel_code = scored.reel.code
     summary = await reel_analyses_db.get(reel_code)
     if summary is None:
         return None
@@ -176,7 +177,7 @@ async def build_reel_analysis(scored: ScoredReel, track: Track) -> ReelAnalysis 
     return ReelAnalysis(
         reel_code=reel_code,
         track=track,
-        bucket=scored.bucket,
+        bucket=bucket,
         shots=shots,
         caption_hooks=summary["caption_hooks"],
         color_tone=summary["color_tone"],
@@ -185,10 +186,21 @@ async def build_reel_analysis(scored: ScoredReel, track: Track) -> ReelAnalysis 
         cut_count=summary["cut_count"],
         avg_shot_sec=summary["avg_shot_sec"],
         first_shot_sec=summary["first_shot_sec"],
-        audio_title=scored.reel.audio_title,
+        audio_title=audio_title,
         model=summary["model"],
         analyzed_at=summary["analyzed_at"],
     )
+
+
+async def build_reel_analysis(scored: ScoredReel, track: Track) -> ReelAnalysis | None:
+    return await _build_reel_analysis(
+        scored.reel.code, track, scored.bucket, scored.reel.audio_title
+    )
+
+
+async def build_my_reel_analysis(reel_code: str, audio_title: str | None) -> ReelAnalysis | None:
+    """P5(내 릴스 진단). 버킷 분류 대상이 아니라 `bucket="unknown"`으로 고정한다."""
+    return await _build_reel_analysis(reel_code, "my_reel", "unknown", audio_title)
 
 
 async def compute_comparison(keyword: str, business_type: str) -> ComparisonResult:
