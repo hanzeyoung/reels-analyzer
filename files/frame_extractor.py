@@ -4,29 +4,70 @@ ffmpeg 기반 릴스 프레임 추출 + 중복 제거 모듈
 """
 
 import os
+import re
+import shutil
 import subprocess
 import tempfile
 from PIL import Image
 import imagehash
 
 
+def _get_ffmpeg_cmd() -> str:
+    """
+    시스템 ffmpeg이 없으면 imageio-ffmpeg 패키지의 번들 바이너리를 사용합니다.
+    """
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg:
+        return ffmpeg
+
+    try:
+        import imageio_ffmpeg
+
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except ImportError as exc:
+        raise RuntimeError(
+            "[frame_extractor] ffmpeg을 찾을 수 없습니다. "
+            "ffmpeg을 설치하거나 imageio-ffmpeg 패키지를 설치하세요."
+        ) from exc
+
+
+def _get_ffprobe_cmd() -> str | None:
+    return shutil.which("ffprobe")
+
+
 # ── 영상 길이 파악 ────────────────────────────
 
 def get_video_duration(video_path: str) -> float:
     """
-    ffprobe로 영상 길이(초)를 반환합니다.
+    ffprobe 또는 ffmpeg로 영상 길이(초)를 반환합니다.
     """
-    result = subprocess.run([
-        "ffprobe", "-v", "error",
-        "-show_entries", "format=duration",
-        "-of", "default=noprint_wrappers=1:nokey=1",
-        video_path
-    ], capture_output=True, text=True)
+    ffprobe = _get_ffprobe_cmd()
+    if ffprobe:
+        result = subprocess.run([
+            ffprobe, "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            video_path
+        ], capture_output=True, text=True)
 
-    try:
-        return float(result.stdout.strip())
-    except ValueError:
-        raise RuntimeError(f"[frame_extractor] 영상 길이 파악 실패: {video_path}")
+        try:
+            return float(result.stdout.strip())
+        except ValueError:
+            pass
+
+    ffmpeg = _get_ffmpeg_cmd()
+    result = subprocess.run([
+        ffmpeg, "-i", video_path
+    ], capture_output=True, text=True)
+    duration_match = re.search(
+        r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)",
+        result.stderr,
+    )
+    if duration_match:
+        hours, minutes, seconds = duration_match.groups()
+        return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
+
+    raise RuntimeError(f"[frame_extractor] 영상 길이 파악 실패: {video_path}")
 
 
 # ── 영상 길이에 따라 프레임 수 결정 ──────────
@@ -44,6 +85,63 @@ def _decide_num_frames(duration: float) -> int:
         return 10
     else:
         return 12
+
+
+def _split_frame_counts(total: int) -> tuple[int, int, int]:
+    """
+    초반/중반/후반 프레임 수를 나눕니다.
+    릴스 후킹 분석을 위해 초반에 약 60%를 배정합니다.
+    """
+    intro = max(1, round(total * 0.60))
+    middle = max(1, round(total * 0.25))
+    ending = max(1, total - intro - middle)
+
+    while intro + middle + ending > total:
+        if middle >= ending and middle > 1:
+            middle -= 1
+        elif ending > 1:
+            ending -= 1
+        else:
+            intro -= 1
+
+    while intro + middle + ending < total:
+        intro += 1
+
+    return intro, middle, ending
+
+
+def _evenly_spaced_times(start: float, end: float, count: int, duration: float) -> list[float]:
+    if count <= 0:
+        return []
+
+    start = max(0.0, min(start, duration))
+    end = max(start, min(end, duration))
+    if end <= start:
+        return [min(start, max(duration - 0.05, 0.0))]
+
+    step = (end - start) / count
+    return [
+        min(start + step * (idx + 0.5), max(duration - 0.05, 0.0))
+        for idx in range(count)
+    ]
+
+
+def _build_weighted_timestamps(duration: float, total: int) -> list[float]:
+    """
+    초반/중반/후반으로 나누되 초반을 더 촘촘히 뽑습니다.
+    - 초반: 0~20%
+    - 중반: 20~70%
+    - 후반: 70~100%
+    """
+    intro_count, middle_count, ending_count = _split_frame_counts(total)
+    intro_end = min(duration * 0.20, 4.0)
+    middle_end = duration * 0.70
+
+    timestamps = []
+    timestamps.extend(_evenly_spaced_times(0.0, intro_end, intro_count, duration))
+    timestamps.extend(_evenly_spaced_times(intro_end, middle_end, middle_count, duration))
+    timestamps.extend(_evenly_spaced_times(middle_end, duration, ending_count, duration))
+    return sorted(set(round(ts, 2) for ts in timestamps))
 
 
 # ── 중복 프레임 제거 ──────────────────────────
@@ -81,6 +179,7 @@ def extract_frames(
     """
     릴스 영상에서 프레임을 추출합니다.
     영상 길이에 따라 자동으로 프레임 수를 결정하고,
+    초반/중반/후반 중 초반 후킹 구간을 더 촘촘히 추출한 뒤
     중복 프레임을 제거합니다.
 
     Args:
@@ -94,22 +193,33 @@ def extract_frames(
     """
     duration = get_video_duration(video_path)
     num_frames = _decide_num_frames(duration)
-    interval = duration / num_frames
+    timestamps = _build_weighted_timestamps(duration, num_frames)
 
     if output_dir is None:
         output_dir = tempfile.mkdtemp(prefix="reels_frames_")
     os.makedirs(output_dir, exist_ok=True)
+    for filename in os.listdir(output_dir):
+        if filename.startswith("frame_") and filename.endswith(".jpg"):
+            os.remove(os.path.join(output_dir, filename))
 
-    print(f"[frame_extractor] 영상 길이: {duration:.1f}초 → {num_frames}장 추출 (간격: {interval:.1f}초)")
+    intro_count, middle_count, ending_count = _split_frame_counts(num_frames)
+    print(
+        f"[frame_extractor] 영상 길이: {duration:.1f}초 → {num_frames}장 추출 "
+        f"(초반 {intro_count}, 중반 {middle_count}, 후반 {ending_count})"
+    )
 
-    output_pattern = os.path.join(output_dir, "frame_%03d.jpg")
-    subprocess.run([
-        "ffmpeg", "-y",
-        "-i", video_path,
-        "-vf", f"fps=1/{interval}",
-        "-q:v", "2",        # JPEG 품질 (1~31, 낮을수록 고품질)
-        output_pattern
-    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    ffmpeg = _get_ffmpeg_cmd()
+
+    for idx, timestamp in enumerate(timestamps, start=1):
+        output_path = os.path.join(output_dir, f"frame_{idx:03d}_{timestamp:05.2f}s.jpg")
+        subprocess.run([
+            ffmpeg, "-y",
+            "-ss", f"{timestamp:.2f}",
+            "-i", video_path,
+            "-frames:v", "1",
+            "-q:v", "2",        # JPEG 품질 (1~31, 낮을수록 고품질)
+            output_path,
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     frames = sorted([
         os.path.join(output_dir, f)

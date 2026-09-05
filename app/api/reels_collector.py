@@ -3,6 +3,7 @@
 import os
 import math
 import time
+import argparse
 from pathlib import Path
 
 import json
@@ -21,10 +22,22 @@ load_dotenv()
 APIFY_TOKEN = os.getenv("APIFY_TOKEN")
 ACTOR_ID = "patient_discovery/instagram-search-reels"
 DOWNLOAD_LOG_FILENAME = "download_log.jsonl"
+KEYWORD_CATEGORY_SUFFIXES = [
+    "베이커리", "디저트", "브런치", "필라테스", "헬스", "맛집", "카페",
+    "식당", "네일", "뷰티", "패션", "미용", "술집", "병원", "학원", "공방",
+]
+LOCATION_SUFFIXES = ["동", "역", "구", "시", "군", "읍", "면", "리", "로", "길", "가"]
+CATEGORY_ALIASES = {
+    "카페": ["카페", "커피", "라떼", "디저트", "베이커리", "브런치", "빵집", "소금빵", "수플레", "타르트", "팬케이크", "휘낭시에", "에그타르트", "까눌레", "말차"],
+    "맛집": ["맛집", "음식", "메뉴", "식당", "밥집", "고기", "파스타", "라멘", "국밥", "분식", "한식", "일식", "양식"],
+    "네일": ["네일", "네일샵", "네일아트", "젤네일", "패디", "손톱"],
+    "뷰티": ["뷰티", "미용", "메이크업", "피부", "관리", "왁싱", "속눈썹"],
+    "헬스": ["헬스", "운동", "피트니스", "pt", "근력", "다이어트"],
+    "필라테스": ["필라테스", "운동", "체형", "자세", "재활"],
+}
 
 if not APIFY_TOKEN:
     raise ValueError("APIFY_TOKEN이 없습니다. .env 파일을 확인하세요.")
-
 
 def get_reels_data(keyword: str, max_items: int = 20) -> list[dict]:
     """
@@ -101,7 +114,6 @@ def get_reels_data(keyword: str, max_items: int = 20) -> list[dict]:
 
     return dataset_res.json()
 
-
 def safe_get_number(item, key):
     """
     None 값 방지용 숫자 추출 함수
@@ -112,7 +124,6 @@ def safe_get_number(item, key):
         return 0
 
     return value
-
 
 def calculate_buza_score(item):
     """
@@ -137,11 +148,9 @@ def calculate_buza_score(item):
 
     return round(score, 4)
 
-
 def calculate_score(item):
     """기존 Buza 점수 계산 로직을 재사용합니다."""
     return calculate_buza_score(item)
-
 
 def safe_number(value):
     """숫자형이 아니거나 None인 경우 0을 반환합니다."""
@@ -155,7 +164,6 @@ def safe_number(value):
         except (ValueError, TypeError):
             return 0
 
-
 def get_caption_text(item):
     """릴스 캡션을 안전하게 추출합니다."""
     caption = item.get("caption") or item.get("caption_text") or item.get("description") or ""
@@ -165,11 +173,9 @@ def get_caption_text(item):
         caption = " ".join(str(v) for v in caption)
     return str(caption)
 
-
 def get_audio_title(item):
     """오디오 제목을 안전하게 추출합니다."""
     return str(item.get("audio_title") or item.get("music_title") or item.get("audio_name") or "")
-
 
 def normalize_search_text(value: str) -> str:
     """검색 비교용 텍스트를 소문자와 공백 기준으로 정리합니다."""
@@ -177,11 +183,25 @@ def normalize_search_text(value: str) -> str:
     text = re.sub(r"[^0-9a-z가-힣]+", " ", text)
     return re.sub(r"\s+", " ", text).strip()
 
-
 def compact_search_text(value: str) -> str:
     """해시태그처럼 붙어 있는 키워드 비교를 위해 공백을 제거합니다."""
     return normalize_search_text(value).replace(" ", "")
 
+def strip_hashtags(value: str) -> str:
+    """해시태그만 맞는 결과가 주제 일치로 과대평가되지 않도록 제거합니다."""
+    return re.sub(r"#[0-9a-zA-Z가-힣_]+", " ", str(value or ""))
+
+def get_category_aliases(category_terms: list[str]) -> list[str]:
+    aliases = []
+    for term in category_terms:
+        aliases.extend(CATEGORY_ALIASES.get(term, [term]))
+    return list(dict.fromkeys(normalize_search_text(alias) for alias in aliases if alias))
+
+def match_any_term(terms: list[str], text: str, compact_text: str) -> list[str]:
+    return [
+        term for term in terms
+        if term and (term in text or compact_search_text(term) in compact_text)
+    ]
 
 def get_relevance_text(item) -> str:
     """키워드 관련성 판단에 쓸 사용자 노출 메타데이터만 모읍니다."""
@@ -223,46 +243,110 @@ def get_relevance_text(item) -> str:
         item.get("locationName", ""),
     ]))
 
+def expand_keyword_terms(keyword: str) -> list[str]:
+    """붙여 쓴 검색어를 지역/업종 단어로 확장합니다. 예: 성수동카페 -> 성수동, 성수, 카페."""
+    terms = []
+    for raw_term in normalize_search_text(keyword).split(" "):
+        term = raw_term.strip()
+        if not term:
+            continue
+
+        terms.append(term)
+        compact = compact_search_text(term)
+
+        for suffix in sorted(KEYWORD_CATEGORY_SUFFIXES, key=len, reverse=True):
+            if compact.endswith(suffix) and len(compact) > len(suffix):
+                location = compact[:-len(suffix)]
+                terms.extend([location, suffix])
+                if len(location) > 2 and location[-1] in LOCATION_SUFFIXES:
+                    terms.append(location[:-1])
+                break
+
+    return list(dict.fromkeys(term for term in terms if len(term) >= 2))
 
 def get_keyword_terms(keyword: str) -> list[str]:
     """복합 검색어를 관련성 검증용 단어 목록으로 분해합니다."""
-    normalized = normalize_search_text(keyword)
-    return list(dict.fromkeys(term for term in normalized.split(" ") if term))
+    return expand_keyword_terms(keyword)
 
-
-def is_relevant_reel(item, keyword):
-    """검색어와 실제 릴스 메타데이터가 맞는 경우에만 통과시킵니다."""
+def calculate_keyword_relevance(item, keyword: str) -> tuple[bool, float, list[str]]:
+    """검색어와 실제 릴스 메타데이터의 관련성을 점수화합니다."""
     if not keyword:
-        return True
+        return True, 1.0, []
 
-    relevance_text = get_relevance_text(item)
     keyword_text = normalize_search_text(keyword)
     keyword_compact = compact_search_text(keyword)
-    search_text = normalize_search_text(relevance_text)
-    search_compact = compact_search_text(relevance_text)
-
     if not keyword_text:
-        return True
+        return True, 1.0, []
 
-    # 전체 문구가 그대로 있거나 해시태그처럼 붙어 있으면 가장 확실한 관련 결과입니다.
-    if keyword_text in search_text or keyword_compact in search_compact:
-        return True
+    caption_text = get_caption_text(item)
+    primary_text = " ".join(filter(None, [strip_hashtags(caption_text), get_audio_title(item)]))
+    full_text = get_relevance_text(item)
+    primary_search_text = normalize_search_text(primary_text)
+    primary_compact = compact_search_text(primary_text)
+    full_search_text = normalize_search_text(full_text)
+    full_compact = compact_search_text(full_text)
 
     terms = get_keyword_terms(keyword)
     if not terms:
-        return True
+        return True, 1.0, []
 
-    matched_count = sum(
-        1 for term in terms
-        if term in search_text or term in search_compact
-    )
+    original_compact = keyword_compact
+    core_terms = [term for term in terms if term != original_compact]
+    if not core_terms:
+        is_match = original_compact in full_compact
+        score = 1.0 if original_compact in primary_compact else 0.65
+        return is_match, score if is_match else 0.0, [original_compact] if is_match else []
 
-    if len(terms) == 1:
-        return matched_count == 1
+    category_terms = [term for term in core_terms if term in KEYWORD_CATEGORY_SUFFIXES]
+    location_terms = [term for term in core_terms if term not in KEYWORD_CATEGORY_SUFFIXES]
+    category_aliases = get_category_aliases(category_terms)
 
-    required_count = len(terms) if len(terms) <= 3 else math.ceil(len(terms) * 0.75)
-    return matched_count >= required_count
+    matched_locations_primary = match_any_term(location_terms, primary_search_text, primary_compact)
+    matched_locations_full = match_any_term(location_terms, full_search_text, full_compact)
+    matched_categories_primary = match_any_term(category_aliases, primary_search_text, primary_compact)
+    matched_categories_full = match_any_term(category_aliases, full_search_text, full_compact)
 
+    full_exact_primary = keyword_text in primary_search_text or keyword_compact in primary_compact
+    full_exact_any = keyword_text in full_search_text or keyword_compact in full_compact
+
+    if category_terms and location_terms:
+        is_match = bool(full_exact_primary or (matched_locations_primary and matched_categories_primary))
+    elif category_terms:
+        is_match = bool(matched_categories_primary or full_exact_primary)
+    elif location_terms:
+        is_match = bool(matched_locations_primary or full_exact_primary)
+    else:
+        matched_core = match_any_term(core_terms, full_search_text, full_compact)
+        required_count = len(core_terms) if len(core_terms) <= 3 else math.ceil(len(core_terms) * 0.75)
+        is_match = len(set(matched_core)) >= required_count
+
+    if not is_match:
+        return False, 0.0, []
+
+    matched_terms = []
+    if full_exact_any:
+        matched_terms.append(original_compact)
+    matched_terms.extend(matched_locations_primary or matched_locations_full)
+    matched_terms.extend(matched_categories_primary or matched_categories_full)
+    matched_terms = list(dict.fromkeys(matched_terms))
+
+    if full_exact_primary:
+        score = 1.0
+    elif matched_locations_primary and matched_categories_primary:
+        score = 0.92
+    elif matched_categories_primary or matched_locations_primary:
+        score = 0.72
+    elif matched_categories_full or matched_locations_full:
+        score = 0.72
+    else:
+        score = 0.65
+
+    return True, round(score, 4), matched_terms
+
+def is_relevant_reel(item, keyword):
+    """검색어와 실제 릴스 메타데이터가 맞는 경우에만 통과시킵니다."""
+    is_match, _, _ = calculate_keyword_relevance(item, keyword)
+    return is_match
 
 def normalize_duplicate_text(value: str) -> str:
     """중복 릴스 비교용으로 캡션을 정규화합니다."""
@@ -272,7 +356,6 @@ def normalize_duplicate_text(value: str) -> str:
         if not token.startswith("http") and token not in {"reels", "reel", "릴스"}
     ]
     return " ".join(tokens)
-
 
 def get_reel_identity(reel: dict) -> tuple[str, ...]:
     """완전히 같은 릴스를 빠르게 찾기 위한 고유값 후보를 반환합니다."""
@@ -286,7 +369,6 @@ def get_reel_identity(reel: dict) -> tuple[str, ...]:
         ]
         if value
     )
-
 
 def is_duplicate_reel(candidate: dict, selected: list[dict], caption_threshold: float = 0.82) -> bool:
     """이미 선택된 릴스와 같거나 거의 같은 콘텐츠인지 판단합니다."""
@@ -314,7 +396,6 @@ def is_duplicate_reel(candidate: dict, selected: list[dict], caption_threshold: 
 
     return False
 
-
 def select_unique_top_reels(
     reels: list[dict],
     top_n: int,
@@ -324,7 +405,11 @@ def select_unique_top_reels(
     selected = []
     previous_reels = previous_reels or []
 
-    for reel in sorted(reels, key=lambda x: x["rank_score"], reverse=True):
+    for reel in sorted(
+        reels,
+        key=lambda x: (x.get("keyword_relevance_score", 0), x["rank_score"]),
+        reverse=True,
+    ):
         if is_duplicate_reel(reel, previous_reels):
             print(f"[로그 중복 제외] {reel.get('code') or reel.get('id')}")
             continue
@@ -339,7 +424,6 @@ def select_unique_top_reels(
 
     return selected
 
-
 def make_reel_url(item):
     """
     code 값을 이용해 인스타그램 릴스 URL 생성
@@ -350,7 +434,6 @@ def make_reel_url(item):
         return ""
 
     return f"https://www.instagram.com/reel/{code}/"
-
 
     # 전체 검색어가 캡션에 있으면 통과
 
@@ -365,7 +448,10 @@ def process_reels(raw_data: list[dict], keyword: str) -> list[dict]:
             continue
 
         # 검색어와 관련 없는 릴스 제거
-        if not is_relevant_reel(reel, keyword):
+        is_relevant, relevance_score, matched_terms = calculate_keyword_relevance(reel, keyword)
+        if not is_relevant:
+            code = reel.get("code") or reel.get("id") or "unknown"
+            print(f"[키워드 무관 제외] {code} · 검색어={keyword}")
             continue
 
         user = reel.get("user", {})
@@ -374,6 +460,8 @@ def process_reels(raw_data: list[dict], keyword: str) -> list[dict]:
 
         processed.append({
             "rank_score": calculate_score(reel),
+            "keyword_relevance_score": relevance_score,
+            "matched_keyword_terms": matched_terms,
             "id": reel.get("id"),
             "code": reel.get("code"),
             "url": make_reel_url(reel),
@@ -401,12 +489,30 @@ def get_top_reels(
     save_dir: str | None = None,
     candidate_multiplier: int = 3,
 ) -> list[dict]:
-    candidate_count = max(max_items, top_n * candidate_multiplier)
-    raw_data = get_reels_data(keyword, max_items=candidate_count)
-    processed = process_reels(raw_data, keyword)
     previous_reels = sync_existing_videos_to_log(save_dir) if save_dir else []
+    candidate_count = max(max_items, top_n * candidate_multiplier)
+    max_candidate_count = max(candidate_count, top_n * 12)
+    top_reels = []
 
-    top_reels = select_unique_top_reels(processed, top_n, previous_reels=previous_reels)
+    while candidate_count <= max_candidate_count:
+        raw_data = get_reels_data(keyword, max_items=candidate_count)
+        processed = process_reels(raw_data, keyword)
+        top_reels = select_unique_top_reels(processed, top_n, previous_reels=previous_reels)
+
+        print(
+            f"[키워드 필터] 후보 {len(raw_data)}개 중 관련 영상 {len(processed)}개, "
+            f"선택 {len(top_reels)}/{top_n}개"
+        )
+        if len(top_reels) >= top_n:
+            break
+
+        next_candidate_count = min(candidate_count * 2, max_candidate_count)
+        if next_candidate_count == candidate_count:
+            break
+        candidate_count = next_candidate_count
+
+    if len(top_reels) < top_n:
+        print(f"[경고] 키워드와 관련 있고 중복이 아닌 릴스를 {len(top_reels)}/{top_n}개만 찾았습니다.")
 
     return top_reels
 
@@ -419,17 +525,14 @@ def safe_filename(text: str) -> str:
 
     return re.sub(r'[\\/:*?"<>|]', "_", text)
 
-
 def get_video_save_path(code: str, save_dir: str = "videos") -> str:
     """릴스 code 기준 저장 경로를 반환합니다."""
     filename = f"{safe_filename(code)}.mp4"
     return os.path.join(save_dir, filename)
 
-
 def get_download_log_path(save_dir: str = "videos") -> str:
     """다운로드 로그 파일 경로를 반환합니다."""
     return os.path.join(save_dir, DOWNLOAD_LOG_FILENAME)
-
 
 def read_download_log(save_dir: str = "videos") -> list[dict]:
     """videos 폴더의 다운로드 로그를 읽어 중복 비교용 목록으로 반환합니다."""
@@ -449,7 +552,6 @@ def read_download_log(save_dir: str = "videos") -> list[dict]:
                 continue
 
     return entries
-
 
 def append_download_log(
     reel: dict,
@@ -477,6 +579,8 @@ def append_download_log(
         "like_count": reel.get("like_count"),
         "comment_count": reel.get("comment_count"),
         "share_count": reel.get("share_count"),
+        "keyword_relevance_score": reel.get("keyword_relevance_score"),
+        "matched_keyword_terms": reel.get("matched_keyword_terms", []),
         "video_url": reel.get("video_url"),
         "local_video_path": video_path,
         "message": f"[다운로드 완료] {code} -> {video_path}",
@@ -486,7 +590,6 @@ def append_download_log(
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
     return entry
-
 
 def sync_existing_videos_to_log(save_dir: str = "videos") -> list[dict]:
     """로그가 없는 기존 mp4도 code 기준 중복 비교에 쓰도록 로그에 반영합니다."""
@@ -519,7 +622,6 @@ def sync_existing_videos_to_log(save_dir: str = "videos") -> list[dict]:
         logged_codes.add(code)
 
     return entries
-
 
 def download_reel_video(video_url: str, code: str, save_dir: str = "videos") -> str:
     """
@@ -557,13 +659,20 @@ def download_reel_video(video_url: str, code: str, save_dir: str = "videos") -> 
 
     return save_path
 
-def download_top_reel_videos(top_reels: list[dict], save_dir: str = "videos") -> list[dict]:
+def download_top_reel_videos(
+    top_reels: list[dict],
+    save_dir: str = "videos",
+    keyword: str = "",
+    target_count: int | None = None,
+) -> list[dict]:
     """
     Top 릴스 목록의 video_url을 이용해 영상을 다운로드하고,
     각 릴스 dict에 local_video_path를 추가한다.
+    keyword가 있으면 다운로드 직전에도 관련성 검사를 한 번 더 수행한다.
     """
     downloaded = []
     download_log = sync_existing_videos_to_log(save_dir)
+    target_count = target_count or len(top_reels)
 
     for reel in top_reels:
         video_url = reel.get("video_url")
@@ -573,9 +682,13 @@ def download_top_reel_videos(top_reels: list[dict], save_dir: str = "videos") ->
             print(f"[건너뜀] video_url 없음: {code}")
             continue
 
-        if is_duplicate_reel(reel, download_log):
-            print(f"[로그 중복 건너뜀] {code}")
-            continue
+        if keyword:
+            is_relevant, relevance_score, matched_terms = calculate_keyword_relevance(reel, keyword)
+            if not is_relevant:
+                print(f"[키워드 무관 다운로드 제외] {code} · 검색어={keyword}")
+                continue
+            reel["keyword_relevance_score"] = relevance_score
+            reel["matched_keyword_terms"] = matched_terms
 
         save_path = get_video_save_path(code, save_dir)
         if os.path.exists(save_path):
@@ -587,6 +700,13 @@ def download_top_reel_videos(top_reels: list[dict], save_dir: str = "videos") ->
             )
             download_log.append(log_entry)
             print(f"[기존 파일 건너뜀] {code} -> {save_path}")
+            reel["local_video_path"] = save_path
+            downloaded.append(reel)
+            if len(downloaded) >= target_count:
+                break
+            continue
+        if is_duplicate_reel(reel, download_log):
+            print(f"[로그 중복 건너뜀] {code}")
             continue
 
         try:
@@ -601,6 +721,8 @@ def download_top_reel_videos(top_reels: list[dict], save_dir: str = "videos") ->
             download_log.append(append_download_log(reel, video_path, save_dir=save_dir))
 
             print(f"[다운로드 완료] {code} -> {video_path}")
+            if len(downloaded) >= target_count:
+                break
 
         except Exception as e:
             print(f"[다운로드 실패] {code}: {e}")
@@ -609,13 +731,25 @@ def download_top_reel_videos(top_reels: list[dict], save_dir: str = "videos") ->
 
 # 3. 메인 실행부
 if __name__ == "__main__":
-    keyword = "성수동카페"
+    parser = argparse.ArgumentParser(description="인스타그램 릴스 검색어를 입력해 상위 릴스를 수집합니다.")
+    parser.add_argument("--keyword", default="", help="검색 키워드. 예: 성수동카페, 강남네일, 홍대맛집")
+    parser.add_argument("--max-items", type=int, default=20, help="Apify에서 가져올 후보 릴스 수")
+    parser.add_argument("--top-n", type=int, default=5, help="스코어링 후 다운로드할 상위 릴스 수")
+    parser.add_argument("--save-dir", default="videos", help="영상과 다운로드 로그를 저장할 폴더")
+    args = parser.parse_args()
+
+    keyword = args.keyword.strip()
+    if not keyword:
+        keyword = input("검색 키워드를 입력하세요 (예: 성수동카페): ").strip()
+
+    if not keyword:
+        raise ValueError("검색 키워드가 필요합니다.")
 
     top_reels = get_top_reels(
         keyword=keyword,
-        max_items=20,
-        top_n=5,
-        save_dir="videos"
+        max_items=args.max_items,
+        top_n=args.top_n * 3,
+        save_dir=args.save_dir
     )
 
     if not top_reels:
@@ -632,21 +766,29 @@ if __name__ == "__main__":
             "like_count",
             "comment_count",
             "share_count",
+            "keyword_relevance_score",
+            "matched_keyword_terms",
             "video_url"
         ]])
 
         print("\n=== 영상 다운로드 시작 ===")
         downloaded_reels = download_top_reel_videos(
             top_reels,
-            save_dir="videos"
+            save_dir=args.save_dir,
+            keyword=keyword,
+            target_count=args.top_n,
         )
 
         print(f"\n총 {len(downloaded_reels)}개 영상 다운로드 완료")
+        if len(downloaded_reels) < args.top_n:
+            raise RuntimeError(f"키워드 관련 영상 {args.top_n}개 확보 실패: {len(downloaded_reels)}개만 확보됨")
 
         print("\n=== 필터링된 릴스 캡션 확인 ===")
-        
+
         for reel in top_reels:
             print("URL:", reel["url"])
             print("점수:", reel["rank_score"])
+            print("매칭 키워드:", ", ".join(reel.get("matched_keyword_terms", [])))
+            print("관련성 점수:", reel.get("keyword_relevance_score"))
             print("캡션:", reel["caption"][:100])
             print("-" * 50)

@@ -9,6 +9,7 @@ google-generativeai==0.7.2
 
 # 영상 프레임 추출 (ffmpeg 래퍼)
 # ffmpeg은 별도 시스템 설치 필요: brew install ffmpeg / apt install ffmpeg
+imageio-ffmpeg==0.6.0
 
 # 중복 프레임 제거
 imagehash==4.3.1
@@ -34,3 +35,6 @@ Pillow==10.3.0
 
 # OpenAI (NLP 보조)
 openai==1.35.3
+
+# 테스트
+pytest==9.1.1

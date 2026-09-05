@@ -34,3 +34,10 @@ Thumbs.db
 # Streamlit
 .streamlit/secrets.toml
 videos/
+
+# Generated analysis artifacts
+reports/*.md
+files/test_frames/
+files/test_weighted_frames/
+files/test_app_weighted_frames/
+videos_verify*/

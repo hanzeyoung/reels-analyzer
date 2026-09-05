@@ -31,3 +31,8 @@ openai==1.35.3
 
 # 이미지 처리
 Pillow==10.3.0
+imagehash==4.3.1
+imageio-ffmpeg==0.6.0
+
+# 테스트
+pytest==9.1.1

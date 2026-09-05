@@ -19,8 +19,11 @@ from app.core.frame_extractor import extract_unique_frames
 
 load_dotenv()
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-MODEL_NAME = "gemini-1.5-flash"
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+if GEMINI_API_KEY:
+    os.environ.setdefault("GOOGLE_API_KEY", GEMINI_API_KEY)
+genai.configure(api_key=GEMINI_API_KEY)
+MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
 
 
 # ── 프롬프트 ─────────────────────────────────
@@ -28,11 +31,12 @@ MODEL_NAME = "gemini-1.5-flash"
 ANALYSIS_PROMPT = """
 당신은 인스타그램 릴스 마케팅 전문 분석가입니다.
 아래 릴스 영상 및 정보를 분석하여 소상공인이 참고할 수 있는 인사이트를 추출해주세요.
+프레임은 첫 1~4초 후킹 구간을 더 촘촘히 보고, 이후 중반/후반도 함께 참고하는 방식으로 추출됩니다.
 
 [분석 항목]
 1. camera_angles: 영상에서 발견된 촬영 구도 목록 (탑뷰, 클로즈업, 팔로잉샷, 정면샷 등)
 2. cut_speed: 컷 편집 속도 (느림 / 보통 / 빠름)
-3. hook_text: 첫 3초 내 등장하는 후킹 문구 또는 핵심 장면 설명
+3. hook_text: 첫 1~4초 후킹 구간에 등장하는 문구, 제품, 행동 또는 핵심 장면 설명
 4. subtitle_position: 자막 위치 (상단 / 중앙 / 하단 / 없음)
 5. color_tone: 전반적인 색감 분위기 (따뜻함 / 차가움 / 생동감 / 차분함 등)
 6. bgm_mood: 배경음악 분위기 (신나는 / 감성적 / 조용한 / 없음 등)
