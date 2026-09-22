@@ -12,10 +12,15 @@ import json
 import anthropic
 from dotenv import load_dotenv
 
+from app.core.config import get_env, require_env
+
 load_dotenv()
 
-client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-MODEL = "claude-opus-4-5"
+MODEL = get_env("ANTHROPIC_MODEL", "claude-opus-4-5")
+
+
+def get_client() -> anthropic.Anthropic:
+    return anthropic.Anthropic(api_key=require_env("ANTHROPIC_API_KEY", "Claude 보고서 생성"))
 
 
 # ── 시스템 프롬프트 ──────────────────────────
@@ -90,7 +95,7 @@ def generate_report(report_input: dict) -> str:
 (핵심을 한 문장으로 요약)
 """
 
-    message = client.messages.create(
+    message = get_client().messages.create(
         model=MODEL,
         max_tokens=1500,
         system=SYSTEM_PROMPT,
@@ -144,7 +149,7 @@ def generate_report_stream(report_input: dict):
 ### 💡 이번 주 핵심 한 줄
 """
 
-    with client.messages.stream(
+    with get_client().messages.stream(
         model=MODEL,
         max_tokens=1500,
         system=SYSTEM_PROMPT,

@@ -12,7 +12,10 @@ import tempfile
 from pathlib import Path
 
 from PIL import Image
-import imagehash
+try:
+    import imagehash
+except ImportError:
+    imagehash = None
 
 
 def _get_ffmpeg_path() -> str:
@@ -179,6 +182,8 @@ def remove_similar_frames(
     perceptual hash로 너무 비슷한 프레임을 제거합니다.
     hash_threshold가 낮을수록 더 엄격하게 중복으로 봅니다.
     """
+    if imagehash is None:
+        raise RuntimeError("프레임 중복 제거에는 imagehash 설치가 필요합니다.")
     unique_paths = []
     unique_hashes = []
 

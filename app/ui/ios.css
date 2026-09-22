@@ -1,0 +1,178 @@
+/* iOS-inspired tokens: system type, grouped surfaces, one action color. */
+:root{font-size:16px;--font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Apple SD Gothic Neo","Noto Sans CJK KR","Noto Sans KR","Segoe UI",sans-serif;--accent-contrast:#fff;--success:var(--green);--warning:#a66700;--danger:#e34242}
+html,body,.stApp,[data-testid="stAppViewContainer"],input,textarea,button,select{font-family:var(--font)!important;-webkit-font-smoothing:antialiased}
+html,body,.stApp,[data-testid="stAppViewContainer"]{background:var(--bg);color:var(--text)}
+.block-container{max-width:76rem;padding:2rem 3.5rem 5rem}
+[data-testid="stHeader"]{height:0;background:transparent;border:0}
+[data-testid="stToolbar"]{display:none}
+footer{display:none}
+[data-testid="stVerticalBlock"]{gap:1rem}
+p,li,label,[data-testid="stMarkdownContainer"]{font-size:1rem;line-height:1.6;color:var(--text);word-break:keep-all;overflow-wrap:anywhere}
+h1,h2,h3{font-family:var(--font)!important;color:var(--text);font-weight:650;letter-spacing:-.035em}
+h1{font-size:2.125rem!important;line-height:1.2!important;font-weight:750!important}
+h2{font-size:1.375rem!important;line-height:1.35!important;padding:.6rem 0 .35rem!important}
+h3{font-size:1.0625rem!important;line-height:1.4!important}
+[data-testid="stWidgetLabel"] p{font-size:.875rem;font-weight:500;color:var(--muted)}
+[data-testid="stCaptionContainer"] p,small{font-size:.8125rem;line-height:1.5;color:var(--muted)}
+[data-testid="stMarkdownContainer"] a{color:var(--accent-strong);text-decoration:none}
+/* Compact utility bar. Layout buttons form a restrained segmented control. */
+.ios-wordmark{display:flex;align-items:center;gap:9px;height:44px;font-size:1.0625rem;font-weight:700;letter-spacing:-.035em;white-space:nowrap}
+.ios-wordmark svg{color:var(--accent)}
+.ios-toolbar-marker,.ios-navigation-marker{display:none}
+.element-container:has(.ios-toolbar-marker),.element-container:has(.ios-navigation-marker){display:none}
+[data-testid="stVerticalBlock"]:has(> .element-container .ios-toolbar-marker){border-bottom:1px solid var(--border);padding-bottom:1rem;margin-bottom:.3rem}
+[data-testid="stVerticalBlock"]:has(> .element-container .ios-toolbar-marker) [data-testid="stHorizontalBlock"]{gap:.35rem;flex-wrap:nowrap;align-items:center}
+[data-testid="stVerticalBlock"]:has(> .element-container .ios-toolbar-marker) [data-testid="column"]{min-width:0!important}
+[data-testid="stVerticalBlock"]:has(> .element-container .ios-toolbar-marker) button{border:0;background:transparent;min-height:44px;border-radius:12px;padding:.35rem .5rem;color:var(--muted)}
+[data-testid="stVerticalBlock"]:has(> .element-container .ios-toolbar-marker) button p{font-size:.8125rem;white-space:nowrap;font-weight:600}
+[data-testid="stVerticalBlock"]:has(> .element-container .ios-toolbar-marker) button[kind="primary"]{background:var(--surface);color:var(--text);box-shadow:0 2px 7px #00000010}
+[data-testid="stVerticalBlock"]:has(> .element-container .ios-toolbar-marker) [data-testid="column"]:nth-child(2),
+[data-testid="stVerticalBlock"]:has(> .element-container .ios-toolbar-marker) [data-testid="column"]:nth-child(3){background:var(--surface-soft);padding:3px}
+[data-testid="stVerticalBlock"]:has(> .element-container .ios-toolbar-marker) [data-testid="column"]:nth-child(2){border-radius:14px 0 0 14px;margin-right:-.35rem}
+[data-testid="stVerticalBlock"]:has(> .element-container .ios-toolbar-marker) [data-testid="column"]:nth-child(3){border-radius:0 14px 14px 0}
+/* Web navigation. */
+[data-testid="stSidebar"]{background:var(--glass);border-right:1px solid var(--border);width:252px!important;min-width:252px!important;backdrop-filter:blur(24px)}
+[data-testid="stSidebarUserContent"]{padding:2.7rem 1.1rem 2rem}
+.ios-sidebar-brand{display:flex;align-items:center;gap:12px;padding:0 .35rem 2.7rem;font-weight:700;font-size:1.125rem;letter-spacing:-.035em}
+.ios-sidebar-brand small{display:block;font-size:.6875rem;margin-top:3px;font-weight:400;letter-spacing:0}
+.ios-app-icon{display:grid;place-items:center;width:44px;height:44px;border-radius:13px;flex-shrink:0;background:var(--accent);color:#fff;box-shadow:0 4px 12px #007aff24}
+.ios-nav-caption{padding:0 .8rem .2rem;font-size:.75rem;color:var(--muted);font-weight:500}
+[role="radiogroup"][aria-label="주요 메뉴"]{gap:.3rem}
+[role="radiogroup"][aria-label="주요 메뉴"] label{display:flex;align-items:center;gap:12px;min-height:48px;margin:0;padding:.6rem .85rem;border-radius:12px;border:0!important;color:var(--muted);transition:background .15s}
+[role="radiogroup"][aria-label="주요 메뉴"] label>div:first-child{position:absolute;opacity:0;width:1px;height:1px}
+[role="radiogroup"][aria-label="주요 메뉴"] label p{font-size:.9375rem;font-weight:500;color:inherit}
+[role="radiogroup"][aria-label="주요 메뉴"] label::before{content:"";display:block;width:22px;height:22px;flex-shrink:0;background:currentColor;mask-size:contain;mask-repeat:no-repeat;-webkit-mask-size:contain;-webkit-mask-repeat:no-repeat}
+[role="radiogroup"][aria-label="주요 메뉴"] label:has(input:checked){background:var(--blue-soft)!important;color:var(--accent-strong)!important}
+[role="radiogroup"][aria-label="주요 메뉴"] label:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+[role="radiogroup"][aria-label="주요 메뉴"] label:hover{background:var(--surface-soft)}
+.ios-sidebar-foot{border-top:1px solid var(--border);margin:2.5rem .6rem 1.2rem;padding-top:1.5rem;font-size:.8125rem;line-height:1.7;color:var(--muted)}
+/* Page title, generous whitespace, quiet secondary text. */
+.rl-head{margin:.65rem 0 .6rem;padding:.4rem 0 1rem;border:0}
+.rl-head h1{margin:.5rem 0 .65rem;padding:0}
+.rl-head p{font-size:.9375rem;margin:0;color:var(--muted);font-weight:400}
+.rl-kicker{font-size:.75rem;font-weight:500;letter-spacing:.02em;color:var(--muted);text-transform:none}
+.ios-section-title{display:flex;align-items:baseline;justify-content:space-between;margin:.7rem 0 .8rem;gap:12px}
+.ios-section-title h2{margin:0;padding:0!important;font-size:1.25rem!important}
+.ios-section-title span{font-size:.8125rem;color:var(--muted)}
+/* Home: the next useful action comes first. */
+[data-testid="stVerticalBlockBorderWrapper"]:has(>div>[data-testid="stVerticalBlock"]>.element-container .ios-focus-marker){border:0;border-radius:24px;background:linear-gradient(120deg,var(--hero),var(--hero-end));padding:1.75rem;min-height:286px}
+.ios-focus-marker{display:none}
+.ios-focus{position:relative;min-height:164px;padding-right:98px}
+.ios-focus .ios-eyebrow{display:flex;align-items:center;gap:7px;font-size:.8125rem;font-weight:600;color:var(--accent-strong);margin-bottom:19px}
+.ios-focus h2{font-size:1.75rem!important;line-height:1.35!important;letter-spacing:-.04em;max-width:340px;margin:0 0 10px;padding:0!important;overflow-wrap:anywhere}
+.ios-focus p{font-size:.875rem;line-height:1.65;margin:0;color:var(--muted);max-width:330px}
+.ios-focus-art{position:absolute;right:0;top:36px;display:grid;place-items:center;width:82px;height:102px;border-radius:20px;transform:rotate(9deg);color:var(--accent);background:var(--surface);border:1px solid var(--border);box-shadow:-9px 10px 0 -2px var(--blue-soft),0 15px 32px #007aff10}
+.ios-focus-art svg{width:43px;height:43px}
+.ios-goal{background:var(--surface);border-radius:24px;padding:1.5rem;min-height:286px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.ios-goal-top{display:flex;align-items:center;justify-content:space-between;width:100%;font-size:.875rem;font-weight:600;margin-bottom:16px}
+.ios-goal-top small{font-size:.75rem;font-weight:400}
+.ios-ring{width:130px;height:130px;border-radius:50%;background:conic-gradient(var(--accent) var(--progress),var(--ring-track) 0);padding:9px;display:grid;place-items:center;transform:rotate(-.1deg)}
+.ios-ring-inner{width:100%;height:100%;border-radius:50%;background:var(--surface);display:flex;flex-direction:column;justify-content:center}
+.ios-ring strong{font-size:2.15rem;font-weight:650;letter-spacing:-.06em;line-height:1.1;font-variant-numeric:tabular-nums}
+.ios-ring small{margin-top:4px;font-size:.75rem}
+.ios-goal p{font-size:.8125rem;color:var(--muted);margin:16px 0 0}
+.ios-pipeline{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:var(--surface);border-radius:20px;padding:1.3rem .7rem}
+.ios-pipeline-item{text-align:center;position:relative;padding:.15rem .3rem}
+.ios-pipeline-item:not(:last-child){border-right:1px solid var(--border)}
+.ios-pipeline-item span{display:block;font-size:.75rem;color:var(--muted);white-space:nowrap}
+.ios-pipeline-item b{display:block;font-size:1.65rem;font-weight:600;letter-spacing:-.04em;margin:.3rem 0 0;font-variant-numeric:tabular-nums}
+.ios-pipeline-item:last-child b{color:var(--green)}
+.ios-empty{padding:1.8rem 1.2rem;background:var(--surface);border-radius:20px;display:flex;gap:16px;align-items:center;min-height:120px}
+.ios-empty-icon{color:var(--muted);display:grid;place-items:center;flex-shrink:0;width:46px;height:46px;border-radius:13px;background:var(--surface-soft)}
+.ios-empty h3{font-size:.9375rem!important;padding:0;margin:0 0 .3rem}
+.ios-empty p{margin:0;color:var(--muted);font-size:.8125rem}
+.ios-project{display:flex;align-items:center;gap:14px;padding:.5rem 0}
+.ios-project-icon{flex-shrink:0;display:grid;place-items:center;width:42px;height:48px;border-radius:11px;color:var(--accent-strong);background:var(--blue-soft)}
+.ios-project-text{min-width:0;flex:1}
+.ios-project-text b{display:block;font-size:.9375rem;font-weight:600;line-height:1.45}
+.ios-project-text small{display:block;margin-top:3px;font-size:.75rem}
+.ios-stage{display:inline-block;border-radius:7px;background:var(--surface-soft);color:var(--muted);font-size:.6875rem;padding:3px 7px;font-weight:500;white-space:nowrap}
+.ios-services{background:var(--surface);border-radius:20px;padding:0 1.25rem}
+.ios-service{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:1.2rem 0;font-size:.9375rem}
+.ios-service+.ios-service{border-top:1px solid var(--border)}
+.ios-service small{display:flex;align-items:center;gap:7px}
+.ios-service i{width:6px;height:6px;border-radius:50%;background:var(--muted)}
+.ios-service.is-ready i{background:var(--green)}
+/* Inputs and actions: clear affordances, minimum 44px hit targets. */
+button,[role="button"],input,textarea,select{font-size:.9375rem!important;min-height:44px}
+[data-testid="stButton"] button,[data-testid="stLinkButton"] a,[data-testid="stDownloadButton"] button,[data-testid="stFormSubmitButton"] button{
+  background:var(--surface-soft);border:1px solid transparent;color:var(--accent-strong);border-radius:12px;font-weight:500;min-height:46px;padding:.55rem 1rem;box-shadow:none;transition:background .15s,transform .12s}
+button p,[data-testid="stLinkButton"] a p{font-size:.9375rem;color:inherit!important;font-weight:500}
+[data-testid="stButton"] button[kind="primary"],[data-testid="stFormSubmitButton"] button[kind="primary"],[data-testid="stLinkButton"] a[kind="primary"]{background:var(--accent);border-color:transparent;color:#fff}
+[data-testid="stButton"] button:hover,[data-testid="stFormSubmitButton"] button:hover,[data-testid="stLinkButton"] a:hover{border-color:var(--accent);color:var(--accent-strong);background:var(--blue-soft)}
+[data-testid="stButton"] button[kind="primary"]:hover,[data-testid="stFormSubmitButton"] button[kind="primary"]:hover{background:var(--accent-strong);color:#fff}
+button:active{transform:scale(.98)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{outline:3px solid var(--accent)!important;outline-offset:3px}
+[data-baseweb="input"],[data-baseweb="base-input"],[data-baseweb="textarea"],[data-baseweb="select"]>div{background:var(--surface-soft)!important;border-color:transparent!important;color:var(--text)!important;border-radius:11px}
+input,textarea{background:transparent!important;color:var(--text)!important;caret-color:var(--accent);font-weight:400}
+input::placeholder,textarea::placeholder{color:var(--muted)!important;opacity:.8}
+[data-baseweb="input"]:focus-within,[data-baseweb="textarea"]:focus-within,[data-baseweb="select"]>div:focus-within{border-color:var(--accent)!important;box-shadow:0 0 0 1px var(--accent)}
+[data-baseweb="select"] span{color:var(--text)}
+[data-baseweb="popover"],[data-baseweb="menu"],[role="listbox"],[role="option"]{background:var(--surface)!important;color:var(--text)!important}
+[role="option"]:hover,[aria-selected="true"][role="option"]{background:var(--surface-soft)!important}
+[data-testid="stForm"]{padding:1.5rem;background:var(--surface);border:0;border-radius:20px}
+[data-testid="stExpander"]{background:var(--surface);border:0;border-radius:16px}
+[data-testid="stExpander"] details{border:0;background:var(--surface);border-radius:16px}
+[data-testid="stExpander"] summary{min-height:48px;color:var(--text)}
+[data-testid="stFileUploaderDropzone"]{background:var(--surface);border:1px dashed var(--border);border-radius:16px}
+[data-testid="stFileUploaderDropzone"] small{color:var(--muted)}
+[data-testid="stAlert"]{background:var(--blue-soft);border:0;border-radius:14px}
+[data-testid="stAlert"],[data-testid="stAlert"] div,[data-testid="stAlert"] p{color:var(--text)!important;font-size:.875rem}
+[data-testid="stDataFrame"],[data-testid="stPlotlyChart"]{background:var(--surface);border:1px solid var(--border);border-radius:16px}
+[data-testid="stMetric"]{background:var(--surface);border:0;border-radius:20px;padding:1.25rem}
+[data-testid="stMetricLabel"]{color:var(--muted)}
+[data-testid="stMetricValue"]{color:var(--text)}
+[data-baseweb="tab-list"]{gap:8px;border-bottom:1px solid var(--border);overflow-x:auto}
+[data-baseweb="tab"]{color:var(--muted);padding:8px 12px;font-size:.875rem;white-space:nowrap;min-height:44px}
+[aria-selected="true"][data-baseweb="tab"]{color:var(--accent-strong);font-weight:600}
+[data-baseweb="tab-highlight"]{background:var(--accent)!important;height:2px}
+/* Existing workspace views share the same semantic surfaces. */
+.rl-metric{background:var(--surface);border:0;border-radius:20px;padding:1.3rem;min-height:110px}
+.rl-metric span,.rl-metric small{display:block;color:var(--muted);font-size:.8125rem}
+.rl-metric b{display:block;font-size:1.8rem;letter-spacing:-.04em;font-weight:650;color:var(--text);margin:.25rem 0}
+.rl-action{background:var(--surface);border:0;border-radius:20px;padding:1.4rem;margin:.4rem 0 1rem}
+.rl-action h3{margin:.4rem 0;color:var(--text)}
+.rl-row{display:grid;grid-template-columns:1.4fr .6fr 1.2fr .75fr;gap:1rem;padding:1rem 0;border-bottom:1px solid var(--border);align-items:center}
+.rl-row span,.rl-row small,.rl-signal p{color:var(--muted)}
+.rl-stage{color:var(--accent-strong);font-size:.8125rem}
+.rl-signal{padding:1.2rem;background:var(--surface);border:0;border-radius:18px;margin:.4rem 0}
+.rl-signal h3{padding:0;margin:.3rem 0}.rl-signal p{font-size:.875rem}
+.rl-demo{background:var(--surface);color:var(--muted);border:0;border-radius:16px;padding:1.3rem;font-size:.875rem;font-weight:400;margin:.4rem 0}
+.rl-timeline{display:flex;height:7px;border-radius:8px;overflow:hidden;margin:1rem 0}.rl-timeline i{flex:1}
+.tl-hook{background:var(--accent)}.tl-good{background:var(--green)}.tl-risk{background:#ff9f0a}.tl-cta{background:#af52de}
+@media(max-width:1100px){.block-container{padding-inline:2rem}.ios-focus{padding-right:70px}.ios-focus-art{width:62px;height:82px}.ios-focus h2{font-size:1.5rem!important}}
+@media(max-width:760px){
+ .block-container{padding:1.2rem 1.25rem 5rem}.rl-head{margin:.5rem 0}.rl-head h1{font-size:2rem!important}
+ [data-testid="stHorizontalBlock"]{flex-wrap:wrap}[data-testid="column"]{flex:1 1 100%!important;min-width:0!important;width:100%!important}
+ [data-testid="stVerticalBlock"]:has(> .element-container .ios-toolbar-marker) [data-testid="column"]{flex:1 1 0!important;width:auto!important}
+ [data-testid="stVerticalBlock"]:has(> .element-container .ios-toolbar-marker) [data-testid="column"]:first-child{flex:1.8 1 0!important}
+ .ios-wordmark{font-size:.9375rem;gap:6px}.ios-wordmark svg{width:19px}
+ .ios-goal{min-height:0;padding:1.25rem;display:grid;grid-template-columns:1fr auto;grid-template-rows:auto auto;text-align:left;column-gap:16px}
+ .ios-goal-top{grid-column:1;display:block;margin:0}.ios-goal-top small{display:block;margin-top:5px}
+ .ios-goal .ios-ring{grid-column:2;grid-row:1 / 3;width:84px;height:84px;padding:6px;text-align:center}
+ .ios-ring strong{font-size:1.55rem}.ios-ring small{font-size:.6875rem}.ios-goal p{grid-column:1;margin:5px 0 0}
+ .rl-row{grid-template-columns:1fr;gap:.4rem}.ios-section-title h2{font-size:1.2rem!important}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+@media(prefers-reduced-transparency:reduce){[data-testid="stSidebar"],[role="radiogroup"][aria-label="주요 메뉴"]{backdrop-filter:none!important;background:var(--surface)!important}}
+/* Explicitly inherit foreground colors through Streamlit's markdown wrapper. */
+button [data-testid="stMarkdownContainer"],[role="radiogroup"][aria-label="주요 메뉴"] [data-testid="stMarkdownContainer"]{color:inherit!important}
+[data-testid="stDecoration"]{display:none}
+[role="radiogroup"][aria-label="주요 메뉴"] label{width:100%;box-sizing:border-box}
+[data-testid="stVerticalBlockBorderWrapper"]:has(>div>[data-testid="stVerticalBlock"]>.element-container .ios-project){background:var(--surface);border:0;border-radius:20px;padding:1rem}
+.ios-ring{background:var(--ring-track)}
+.ios-focus-marker+p,p:has(>.ios-focus-marker){display:none}
+[data-testid="stSidebarUserContent"]{padding-top:1.5rem}
+@media(min-width:761px){[data-testid="stVerticalBlock"]:has(> .element-container .ios-toolbar-marker) [data-testid="column"]:not(:first-child){max-width:76px}}
+.element-container:has([data-testid="stMarkdownContainer"] > style:only-child){display:none}
+[role="radiogroup"][aria-label="주요 메뉴"] label div{color:inherit!important}
+/* Darker blue preserves white-label contrast on prominent actions. */
+[data-testid="stButton"] button[kind="primary"],[data-testid="stFormSubmitButton"] button[kind="primary"],[data-testid="stLinkButton"] a[kind="primary"]{background:#0068d9}
+[data-testid="stVerticalBlock"]:has(> .element-container .ios-toolbar-marker) button[kind="primary"]{background:var(--surface)}
+[data-testid="stFormSubmitButton"] button[kind="primaryFormSubmit"]{background:#0068d9;color:#fff;border-color:transparent}
+[data-testid="stFormSubmitButton"] button[kind="primaryFormSubmit"]:hover{background:#005bbf;color:#fff}
+[data-baseweb="tab-list"]::after{background:linear-gradient(to right,transparent,var(--bg))!important}
+[data-baseweb="tab-list"]::before{background:linear-gradient(to left,transparent,var(--bg))!important}
+.stTabs::after{background:linear-gradient(to right,transparent,var(--bg))!important}
+.stTabs::before{background:linear-gradient(to left,transparent,var(--bg))!important}

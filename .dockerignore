@@ -1,0 +1,12 @@
+.git
+.env
+.venv*
+venv
+.python-test-packages
+.tmp
+__pycache__
+*.pyc
+user_reels
+reports
+logs
+videos*

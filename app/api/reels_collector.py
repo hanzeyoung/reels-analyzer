@@ -15,29 +15,34 @@ import requests
 import pandas as pd
 from dotenv import load_dotenv
 
+from app.core.config import get_env, require_env
+from app.core.observability import enforce_daily_limit, observed_operation, record_api_usage
+
 # 1. 환경 변수 로드
 load_dotenv()
 
 # 2. Apify 설정
-APIFY_TOKEN = os.getenv("APIFY_TOKEN")
+APIFY_TOKEN = get_env("APIFY_TOKEN")
 ACTOR_ID = "patient_discovery/instagram-search-reels"
 DOWNLOAD_LOG_FILENAME = "download_log.jsonl"
 KEYWORD_CATEGORY_SUFFIXES = [
     "베이커리", "디저트", "브런치", "필라테스", "헬스", "맛집", "카페",
-    "식당", "네일", "뷰티", "패션", "미용", "술집", "병원", "학원", "공방",
+    "식당", "식사", "음식", "외식", "밥집", "네일", "뷰티", "패션", "미용",
+    "술집", "병원", "학원", "공방",
 ]
 LOCATION_SUFFIXES = ["동", "역", "구", "시", "군", "읍", "면", "리", "로", "길", "가"]
 CATEGORY_ALIASES = {
     "카페": ["카페", "커피", "라떼", "디저트", "베이커리", "브런치", "빵집", "소금빵", "수플레", "타르트", "팬케이크", "휘낭시에", "에그타르트", "까눌레", "말차"],
     "맛집": ["맛집", "음식", "메뉴", "식당", "밥집", "고기", "파스타", "라멘", "국밥", "분식", "한식", "일식", "양식"],
+    "식사": ["식사", "외식", "맛집", "음식", "메뉴", "식당", "밥집", "고기", "파스타", "라멘", "국밥", "분식", "한식", "일식", "양식"],
+    "음식": ["음식", "식사", "외식", "맛집", "메뉴", "식당", "밥집", "고기", "파스타", "라멘", "국밥", "분식", "한식", "일식", "양식"],
+    "외식": ["외식", "식사", "맛집", "음식", "메뉴", "식당", "밥집"],
+    "밥집": ["밥집", "맛집", "음식", "식사", "메뉴", "식당", "국밥", "한식"],
     "네일": ["네일", "네일샵", "네일아트", "젤네일", "패디", "손톱"],
     "뷰티": ["뷰티", "미용", "메이크업", "피부", "관리", "왁싱", "속눈썹"],
     "헬스": ["헬스", "운동", "피트니스", "pt", "근력", "다이어트"],
     "필라테스": ["필라테스", "운동", "체형", "자세", "재활"],
 }
-
-if not APIFY_TOKEN:
-    raise ValueError("APIFY_TOKEN이 없습니다. .env 파일을 확인하세요.")
 
 def get_reels_data(keyword: str, max_items: int = 20) -> list[dict]:
     """
@@ -49,8 +54,10 @@ def get_reels_data(keyword: str, max_items: int = 20) -> list[dict]:
         "maxItems": max_items,
     }
 
+    enforce_daily_limit("apify", max_calls=int(get_env("APIFY_DAILY_CALL_LIMIT", "50") or 50))
+    apify_token = require_env("APIFY_TOKEN", "Apify 릴스 수집")
     headers = {
-        "Authorization": f"Bearer {APIFY_TOKEN}",
+        "Authorization": f"Bearer {apify_token}",
         "Content-Type": "application/json",
     }
 
@@ -60,12 +67,13 @@ def get_reels_data(keyword: str, max_items: int = 20) -> list[dict]:
     # 1. Actor 실행
     start_url = f"https://api.apify.com/v2/acts/{actor_id_for_url}/runs"
 
-    start_res = requests.post(
-        start_url,
-        headers=headers,
-        json=run_input,
-        timeout=60,
-    )
+    with observed_operation("apify.reels_collection", keyword=keyword, max_items=max_items):
+        start_res = requests.post(
+            start_url,
+            headers=headers,
+            json=run_input,
+            timeout=60,
+        )
 
     start_res.raise_for_status()
 
@@ -112,7 +120,9 @@ def get_reels_data(keyword: str, max_items: int = 20) -> list[dict]:
 
     dataset_res.raise_for_status()
 
-    return dataset_res.json()
+    result = dataset_res.json()
+    record_api_usage("apify", metadata={"operation": "reels_collection", "items": len(result)})
+    return result
 
 def safe_get_number(item, key):
     """
@@ -489,6 +499,9 @@ def get_top_reels(
     save_dir: str | None = None,
     candidate_multiplier: int = 3,
 ) -> list[dict]:
+    keyword = str(keyword or "").strip()
+    if not keyword:
+        raise ValueError("검색 키워드를 입력해주세요.")
     previous_reels = sync_existing_videos_to_log(save_dir) if save_dir else []
     candidate_count = max(max_items, top_n * candidate_multiplier)
     max_candidate_count = max(candidate_count, top_n * 12)
@@ -504,6 +517,12 @@ def get_top_reels(
             f"선택 {len(top_reels)}/{top_n}개"
         )
         if len(top_reels) >= top_n:
+            break
+
+        # 일부 Actor는 요청 수보다 적은 고정 개수만 반환합니다. 이 경우 더 큰
+        # 요청을 반복해도 같은 결과만 오므로 현재 결과를 즉시 사용자에게 보여줍니다.
+        if len(raw_data) < candidate_count:
+            print(f"[키워드 필터] Actor가 요청 {candidate_count}개보다 적은 {len(raw_data)}개를 반환해 추가 호출을 생략합니다.")
             break
 
         next_candidate_count = min(candidate_count * 2, max_candidate_count)

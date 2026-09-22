@@ -16,6 +16,10 @@ venv/
 .venv311/
 env/
 .python-packages/
+.python-test-packages/
+.python-packages312/
+.tmp/
+_archive/
 
 # IDE
 .vscode/
@@ -30,14 +34,30 @@ Thumbs.db
 *.log
 *.tmp
 /tmp/
+.pytest_cache/
+.pytest-run-*/
 
 # Streamlit
 .streamlit/secrets.toml
 videos/
+user_reels/
 
 # Generated analysis artifacts
 reports/*.md
 files/test_frames/
 files/test_weighted_frames/
 files/test_app_weighted_frames/
+files/smoke_frames/
 videos_verify*/
+
+# Legacy local copies kept out of the active app path
+reels-analyzer/
+[{]app/
+venv/
+
+# Local runtimes, operational logs, and generated previews
+.venv-*/
+logs/
+reports/
+.env.*
+!.env.example

@@ -38,6 +38,17 @@ def test_keyword_relevance_for_region_category_keyword(caption, expected):
     assert is_relevant is expected
 
 
+def test_food_synonym_query_matches_local_restaurant_caption():
+    is_relevant, score, terms = collector.calculate_keyword_relevance(
+        {"caption": "광주 상무지구 오마카세 맛집에서 저녁 메뉴 먹고 왔어요"},
+        "광주 식사",
+    )
+
+    assert is_relevant is True
+    assert score > 0
+    assert "광주" in terms
+
+
 def test_process_reels_excludes_hashtag_only_keyword_match():
     items = [
         make_reel("bad", "부산 해운대 맛집 추천 #성수동카페", score=50),
@@ -85,3 +96,18 @@ def test_download_skips_irrelevant_and_failures_until_target_count(tmp_path, mon
     assert "bad" not in attempted
     assert "fail" in attempted
     assert "extra" not in attempted
+
+
+def test_top_reels_does_not_repeat_when_actor_returns_less_than_requested(monkeypatch):
+    calls = []
+    items = [make_reel(f"item-{index}", f"광주 맛집 메뉴 추천 {index}") for index in range(4)]
+
+    def fake_get_reels_data(keyword, max_items):
+        calls.append((keyword, max_items))
+        return items
+
+    monkeypatch.setattr(collector, "get_reels_data", fake_get_reels_data)
+    result = collector.get_top_reels("광주 맛집", max_items=45, top_n=12)
+
+    assert len(result) == 4
+    assert calls == [("광주 맛집", 45)]

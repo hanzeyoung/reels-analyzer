@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>모바일 구도 코치</title>
+  <style>
+    :root {
+      --bg: #071216;
+      --panel: rgba(7, 18, 22, 0.84);
+      --line: rgba(255, 255, 255, 0.46);
+      --guide: #09cbea;
+      --warn: #fbbf24;
+      --text: #ffffff;
+      --muted: rgba(255, 255, 255, 0.72);
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    video {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      background: #111827;
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(90deg, transparent 33%, var(--line) 33.2%, transparent 33.6%, transparent 66%, var(--line) 66.2%, transparent 66.6%),
+        linear-gradient(0deg, transparent 33%, var(--line) 33.2%, transparent 33.6%, transparent 66%, var(--line) 66.2%, transparent 66.6%);
+    }
+
+    .target {
+      position: absolute;
+      border: 3px solid var(--guide);
+      background: rgba(110, 231, 183, 0.12);
+      box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.1);
+    }
+
+    .target::after {
+      content: attr(data-label);
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      min-width: max-content;
+      padding: 0.3rem 0.55rem;
+      border-radius: 999px;
+      color: #071216;
+      background: var(--guide);
+      font-size: 0.9rem;
+      font-weight: 800;
+    }
+
+    .cup {
+      position: absolute;
+      border: 3px solid var(--warn);
+      background: rgba(251, 191, 36, 0.12);
+      border-radius: 999px;
+    }
+
+    .cup::after {
+      content: "컵";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      color: #1f1600;
+      background: var(--warn);
+      border-radius: 999px;
+      padding: 0.25rem 0.45rem;
+      font-size: 0.8rem;
+      font-weight: 800;
+    }
+
+    .topview .target {
+      width: 50vw;
+      height: 50vw;
+      max-width: 17rem;
+      max-height: 17rem;
+      left: 50%;
+      top: 49%;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+    }
+
+    .topview .cup {
+      width: 19vw;
+      height: 19vw;
+      max-width: 6rem;
+      max-height: 6rem;
+      right: 13%;
+      top: 24%;
+    }
+
+    .closeup .target {
+      width: 78vw;
+      height: 44vh;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      border-radius: 1.25rem;
+    }
+
+    .front .target {
+      width: 68vw;
+      height: 36vh;
+      left: 50%;
+      top: 48%;
+      transform: translate(-50%, -50%);
+      border-radius: 0.5rem;
+    }
+
+    .following .target {
+      width: 46vw;
+      height: 50vh;
+      left: 42%;
+      top: 49%;
+      transform: translate(-50%, -50%);
+      border-radius: 999px 999px 1.25rem 1.25rem;
+    }
+
+    .following .lead-space {
+      position: absolute;
+      left: 62%;
+      top: 35%;
+      width: 24vw;
+      height: 30vh;
+      border: 2px dashed var(--warn);
+      border-radius: 1rem;
+    }
+
+    .following .lead-space::after {
+      content: "이동 방향 여백";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      color: var(--warn);
+      width: max-content;
+      font-weight: 800;
+      font-size: 0.85rem;
+    }
+
+    .coach-subtitle {
+      position: fixed;
+      z-index: 3;
+      left: 8%;
+      right: 8%;
+      padding: 0.55rem 0.75rem;
+      border-radius: 0.65rem;
+      color: #071216;
+      background: var(--guide);
+      box-shadow: 0 0.35rem 1.4rem rgba(0, 0, 0, 0.34);
+      font-size: clamp(0.9rem, 3.6vw, 1.15rem);
+      font-weight: 850;
+      line-height: 1.3;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .coach-subtitle:empty { display: none; }
+    .coach-subtitle.top { top: calc(5.2rem + env(safe-area-inset-top)); }
+    .coach-subtitle.mid { top: 46%; }
+    .coach-subtitle.bottom { top: auto; bottom: calc(13rem + env(safe-area-inset-bottom)); }
+
+    .hud {
+      position: fixed;
+      left: 0.75rem;
+      right: 0.75rem;
+      bottom: calc(0.75rem + env(safe-area-inset-bottom));
+      background: var(--panel);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 1rem;
+      padding: 0.9rem;
+      backdrop-filter: blur(14px);
+    }
+
+    .topbar {
+      position: fixed;
+      left: 0.75rem;
+      right: 0.75rem;
+      top: calc(0.75rem + env(safe-area-inset-top));
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    select, button {
+      min-height: 2.6rem;
+      border: 0;
+      border-radius: 0.45rem;
+      padding: 0 0.85rem;
+      font-size: 1rem;
+      font-weight: 700;
+    }
+
+    select {
+      flex: 1;
+      color: var(--text);
+      background: var(--panel);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+
+    button {
+      color: #071019;
+      background: var(--guide);
+    }
+
+    button.secondary {
+      color: var(--text);
+      background: var(--panel);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+
+    button.recording { color: #fff; background: #dc2626; }
+    button:disabled { opacity: 0.48; }
+
+    .title {
+      margin: 0 0 0.35rem;
+      font-size: 1rem;
+      font-weight: 850;
+    }
+
+    .guide {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.45;
+    }
+
+    .progress {
+      margin: 0 0 0.5rem;
+      color: var(--guide);
+      font-size: 0.85rem;
+      font-weight: 800;
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+      pointer-events: auto;
+    }
+
+    .status {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 1.5rem;
+      text-align: center;
+      background: var(--bg);
+    }
+
+    .status.hidden { display: none; }
+    .secure-note { color: var(--warn); font-weight: 750; }
+  </style>
+</head>
+<body>
+  <video id="camera" autoplay playsinline muted></video>
+  <div id="status" class="status">
+    <div>
+      <h1>모바일 구도 코치</h1>
+      <p>카메라 권한을 허용하면 촬영 가이드가 화면 위에 표시됩니다.</p>
+      <button id="start">카메라 시작</button>
+    </div>
+  </div>
+
+  <div id="overlay" class="overlay topview">
+    <div class="target" data-label="대표 메뉴"></div>
+    <div class="cup"></div>
+    <div class="lead-space"></div>
+  </div>
+  <div id="subtitle" class="coach-subtitle top"></div>
+
+  <div class="topbar">
+    <select id="mode" aria-label="구도 선택">
+      <option value="topview">탑뷰</option>
+      <option value="closeup">클로즈업</option>
+      <option value="front">정면샷</option>
+      <option value="following">팔로잉샷</option>
+    </select>
+    <button id="voice">음성 켜기</button>
+    <button id="next" class="secondary">다음 컷</button>
+  </div>
+
+  <section class="hud">
+    <p id="progress" class="progress">1 / 1</p>
+    <p id="title" class="title">탑뷰: 메뉴를 중앙 원 안에 두세요</p>
+    <p id="guide" class="guide">휴대폰을 테이블 위 40~60cm에 두고, 컵은 오른쪽 위 노란 원에 맞춰주세요.</p>
+    <div class="actions">
+      <button id="record">녹화 시작</button>
+      <button id="save" class="secondary" disabled>촬영본 저장/공유</button>
+      <button id="done">이 컷 완료</button>
+      <button id="reset" class="secondary">처음부터</button>
+      <button id="return" class="secondary" style="display:none; grid-column:1 / -1;">촬영본 분석하러 가기</button>
+    </div>
+  </section>
+
+  <script>
+    const video = document.getElementById("camera");
+    const statusPanel = document.getElementById("status");
+    const startButton = document.getElementById("start");
+    const modeSelect = document.getElementById("mode");
+    const voiceButton = document.getElementById("voice");
+    const overlay = document.getElementById("overlay");
+    const subtitle = document.getElementById("subtitle");
+    const title = document.getElementById("title");
+    const guide = document.getElementById("guide");
+    const nextButton = document.getElementById("next");
+    const doneButton = document.getElementById("done");
+    const resetButton = document.getElementById("reset");
+    const progress = document.getElementById("progress");
+    const returnButton = document.getElementById("return");
+    const recordButton = document.getElementById("record");
+    const saveButton = document.getElementById("save");
+    const params = new URLSearchParams(window.location.search);
+    const customMenu = (params.get("menu") || "대표 메뉴").slice(0, 30);
+    const customHook = (params.get("hook") || "").slice(0, 80);
+    const returnUrl = params.get("return") || "";
+    const projectId = (params.get("project") || "practice").slice(0, 80);
+    const projectName = (params.get("name") || "모바일 구도 코치").slice(0, 50);
+    const storageKey = `reel-lab-coach:${projectId}`;
+
+    function decodeShots(value) {
+      if (!value) return [];
+      try {
+        const padded = value + "=".repeat((4 - value.length % 4) % 4);
+        const binary = atob(padded.replace(/-/g, "+").replace(/_/g, "/"));
+        const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+        return JSON.parse(new TextDecoder().decode(bytes));
+      } catch (error) {
+        return [];
+      }
+    }
+
+    const shots = decodeShots(params.get("shots")).map(shot => ({
+      title: shot.t || shot.title || "촬영 장면",
+      guide: shot.g || shot.guide || "표시 영역에 피사체를 맞춰주세요.",
+      text: shot.x || shot.text || "",
+      mode: shot.m || "",
+      layout: Array.isArray(shot.l) ? shot.l : [],
+      position: shot.p || "top",
+      label: shot.a || customMenu,
+      shape: shot.s || "box"
+    }));
+
+    const modes = {
+      topview: {
+        label: "대표 메뉴",
+        title: "탑뷰: 메뉴를 중앙 원 안에 두세요",
+        guide: "휴대폰을 테이블 위 40~60cm에 두고, 컵은 오른쪽 위 노란 원에 맞춰주세요.",
+        speech: ["휴대폰을 테이블 위로 올려주세요.", "대표 메뉴를 중앙 원 안에 두세요.", "컵은 오른쪽 위 노란 원에 맞추면 좋습니다."]
+      },
+      closeup: {
+        label: "메뉴 크게",
+        title: "클로즈업: 메뉴가 화면 대부분을 채우게 하세요",
+        guide: "메뉴에서 15~25cm 정도 떨어지고, 질감이 보이는 부분에 초점을 맞춰주세요.",
+        speech: ["조금 더 가까이 가세요.", "메뉴가 초록 박스를 채우게 맞춰주세요.", "초점을 메뉴 표면에 맞춰주세요."]
+      },
+      front: {
+        label: "메뉴/직원",
+        title: "정면샷: 수평을 맞추고 중앙에 두세요",
+        guide: "휴대폰을 눈높이나 메뉴 높이에 맞추고, 대상이 중앙 박스 안에 들어오게 하세요.",
+        speech: ["휴대폰을 기울이지 말고 수평을 맞춰주세요.", "보여줄 대상을 중앙 박스에 넣어주세요.", "좌우 여백을 비슷하게 맞춰주세요."]
+      },
+      following: {
+        label: "사람",
+        title: "팔로잉샷: 사람 앞쪽에 이동 여백을 남기세요",
+        guide: "피사체를 왼쪽 초록 영역에 두고, 이동 방향에는 노란 점선 여백을 남겨주세요.",
+        speech: ["사람을 초록 영역 안에 두세요.", "걷는 방향 앞쪽에 여백을 남겨주세요.", "휴대폰을 가슴 높이에 두고 천천히 따라가세요."]
+      }
+    };
+
+    let voiceOn = false;
+    let speechTimer = null;
+    let speechIndex = 0;
+    let shotIndex = 0;
+    let cameraStream = null;
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let recordingShotIndex = -1;
+    let recordingStartedAt = 0;
+    let recordingTimer = null;
+    const recordings = new Map();
+    const savedRecordings = new Set();
+    let savedProgress = [];
+    try { savedProgress = JSON.parse(localStorage.getItem(storageKey) || "[]"); } catch (error) { savedProgress = []; }
+    const completed = new Set(Array.isArray(savedProgress) ? savedProgress : []);
+    const shotOrder = ["topview", "closeup", "front", "following"];
+
+    async function startCamera() {
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false
+        });
+        video.srcObject = cameraStream;
+        statusPanel.classList.add("hidden");
+        return cameraStream;
+      } catch (error) {
+        statusPanel.innerHTML = "<div><h1>카메라를 열 수 없습니다</h1><p>브라우저 권한 또는 HTTPS/로컬 네트워크 접속 상태를 확인해주세요.</p></div>";
+        throw error;
+      }
+    }
+
+    function applyProjectLayout(shot) {
+      const target = overlay.querySelector(".target");
+      const cup = overlay.querySelector(".cup");
+      const leadSpace = overlay.querySelector(".lead-space");
+      target.removeAttribute("style");
+      cup.style.display = "none";
+      leadSpace.style.display = shot.mode === "following" ? "block" : "none";
+      target.dataset.label = shot.label || customMenu;
+      if (shot.layout.length === 4 && shot.layout.every(value => Number.isFinite(Number(value)))) {
+        const [left, top, width, height] = shot.layout.map(Number);
+        const safeTop = Math.max(8, Math.min(top, 76 - Math.min(height, 72)));
+        Object.assign(target.style, {
+          left: `${Math.max(0, Math.min(left, 92))}%`,
+          top: `${safeTop}%`,
+          width: `${Math.max(12, Math.min(width, 92))}%`,
+          height: `${Math.max(8, Math.min(height, 72))}%`,
+          maxWidth: "none",
+          maxHeight: "none",
+          transform: "none",
+          borderRadius: shot.shape === "circle" ? "50%" : shot.shape === "pill" ? "999px" : shot.shape === "person" ? "45% 45% 1rem 1rem" : "1rem"
+        });
+      }
+      subtitle.className = `coach-subtitle ${["top", "mid", "bottom"].includes(shot.position) ? shot.position : "top"}`;
+      subtitle.textContent = shot.text;
+    }
+
+    function applyMode(mode, useProjectLayout = true) {
+      const config = modes[mode];
+      overlay.className = `overlay ${mode}`;
+      const shot = shots[shotIndex];
+      const target = overlay.querySelector(".target");
+      target.removeAttribute("style");
+      overlay.querySelector(".cup").style.display = "";
+      overlay.querySelector(".lead-space").style.display = "";
+      target.dataset.label = mode === "following" ? config.label : customMenu;
+      subtitle.className = "coach-subtitle top";
+      subtitle.textContent = customHook;
+      if (shot && useProjectLayout) applyProjectLayout(shot);
+      title.textContent = shot?.title || config.title;
+      guide.textContent = shot ? `${shot.guide} 화면 문구: ${shot.text || "없음"}` : (customHook ? `${config.guide} 첫 문구: ${customHook}` : config.guide);
+      progress.textContent = shots.length ? `${shotIndex + 1} / ${shots.length} · 완료 ${completed.size}` : "구도 연습";
+      doneButton.textContent = completed.has(shotIndex) ? "완료됨" : "이 컷 완료";
+      saveButton.disabled = !recordings.has(shotIndex);
+      saveButton.textContent = savedRecordings.has(shotIndex) ? "저장/공유 완료" : "촬영본 저장/공유";
+      recordButton.textContent = recordings.has(shotIndex) ? "다시 녹화" : "녹화 시작";
+      speechIndex = 0;
+      if (voiceOn) speakCurrent();
+    }
+
+    function speak(text) {
+      if (!("speechSynthesis" in window)) return;
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "ko-KR";
+      utterance.rate = 1.02;
+      utterance.pitch = 1;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function speakCurrent() {
+      const shot = shots[shotIndex];
+      const script = shot ? [shot.guide, shot.text ? `화면 문구는 ${shot.text}` : "자막 없이 촬영합니다."] : modes[modeSelect.value].speech;
+      speak(script[speechIndex % script.length]);
+      speechIndex += 1;
+    }
+
+    function toggleVoice() {
+      voiceOn = !voiceOn;
+      voiceButton.textContent = voiceOn ? "음성 끄기" : "음성 켜기";
+      if (speechTimer) clearInterval(speechTimer);
+      if (voiceOn) {
+        speakCurrent();
+        speechTimer = setInterval(speakCurrent, 5200);
+      } else {
+        window.speechSynthesis?.cancel();
+      }
+    }
+
+    function nextShot() {
+      if (shots.length) shotIndex = (shotIndex + 1) % shots.length;
+      const currentIndex = shotOrder.indexOf(modeSelect.value);
+      const shotText = `${shots[shotIndex]?.title || ""} ${shots[shotIndex]?.guide || ""}`;
+      const inferredMode = shots[shotIndex]?.mode || (shotText.includes("가까") || shotText.includes("클로즈") ? "closeup"
+        : shotText.includes("따라") || shotText.includes("이동") ? "following"
+        : shotText.includes("정면") || shotText.includes("공간") ? "front" : null);
+      const nextMode = inferredMode || shotOrder[(currentIndex + 1) % shotOrder.length];
+      modeSelect.value = nextMode;
+      applyMode(nextMode);
+    }
+
+    function completeShot() {
+      completed.add(shotIndex);
+      localStorage.setItem(storageKey, JSON.stringify([...completed]));
+      if (voiceOn) speak(`${shotIndex + 1}번 컷 완료. 다음 컷으로 이동합니다.`);
+      if (shots.length && completed.size === shots.length) {
+        progress.textContent = `전체 ${shots.length}컷 촬영 완료`;
+        doneButton.textContent = "전체 완료";
+        if (returnUrl) returnButton.style.display = "block";
+        return;
+      }
+      nextShot();
+    }
+
+    function resetShots() {
+      completed.clear();
+      localStorage.removeItem(storageKey);
+      shotIndex = 0;
+      returnButton.style.display = "none";
+      applyMode(initialMode);
+    }
+
+    function recordingMimeType() {
+      if (!("MediaRecorder" in window)) return "";
+      return ["video/mp4;codecs=h264", "video/mp4", "video/webm;codecs=vp9", "video/webm"]
+        .find(type => MediaRecorder.isTypeSupported(type)) || "";
+    }
+
+    function updateRecordingClock() {
+      const elapsed = Math.floor((Date.now() - recordingStartedAt) / 1000);
+      const minutes = String(Math.floor(elapsed / 60)).padStart(2, "0");
+      const seconds = String(elapsed % 60).padStart(2, "0");
+      recordButton.textContent = `녹화 종료 ${minutes}:${seconds}`;
+    }
+
+    async function toggleRecording() {
+      if (mediaRecorder?.state === "recording") {
+        mediaRecorder.stop();
+        return;
+      }
+      if (!("MediaRecorder" in window)) {
+        alert("이 브라우저는 웹 촬영 저장을 지원하지 않습니다. 최신 Safari 또는 Chrome을 사용해주세요.");
+        return;
+      }
+      if (!cameraStream) {
+        try { await startCamera(); } catch (error) { return; }
+      }
+      recordedChunks = [];
+      recordingShotIndex = shotIndex;
+      savedRecordings.delete(recordingShotIndex);
+      const mimeType = recordingMimeType();
+      try {
+        mediaRecorder = mimeType ? new MediaRecorder(cameraStream, { mimeType }) : new MediaRecorder(cameraStream);
+      } catch (error) {
+        mediaRecorder = new MediaRecorder(cameraStream);
+      }
+      mediaRecorder.addEventListener("dataavailable", event => { if (event.data.size) recordedChunks.push(event.data); });
+      mediaRecorder.addEventListener("stop", () => {
+        const type = mediaRecorder.mimeType || mimeType || "video/webm";
+        recordings.set(recordingShotIndex, new Blob(recordedChunks, { type }));
+        clearInterval(recordingTimer);
+        recordButton.classList.remove("recording");
+        nextButton.disabled = false;
+        doneButton.disabled = false;
+        applyMode(modeSelect.value);
+        guide.textContent = `촬영이 끝났습니다. 촬영본 저장/공유를 눌러 파일을 보관하세요. ${guide.textContent}`;
+      });
+      mediaRecorder.start(250);
+      recordingStartedAt = Date.now();
+      recordButton.classList.add("recording");
+      nextButton.disabled = true;
+      doneButton.disabled = true;
+      updateRecordingClock();
+      recordingTimer = setInterval(updateRecordingClock, 500);
+    }
+
+    async function saveRecording() {
+      const blob = recordings.get(shotIndex);
+      if (!blob) return;
+      const extension = blob.type.includes("mp4") ? "mp4" : "webm";
+      const safeName = projectName.replace(/[^0-9A-Za-z가-힣_-]+/g, "-").slice(0, 30) || "reel";
+      const file = new File([blob], `${safeName}-${shotIndex + 1}.${extension}`, { type: blob.type });
+      if (navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: `${projectName} ${shotIndex + 1}번 컷` });
+          savedRecordings.add(shotIndex);
+          applyMode(modeSelect.value);
+          return;
+        }
+        catch (error) { if (error.name === "AbortError") return; }
+      }
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = file.name;
+      link.click();
+      savedRecordings.add(shotIndex);
+      applyMode(modeSelect.value);
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    }
+
+    function hasUnsavedRecordings() {
+      return [...recordings.keys()].some(index => !savedRecordings.has(index));
+    }
+
+    startButton.addEventListener("click", startCamera);
+    modeSelect.addEventListener("change", (event) => applyMode(event.target.value, false));
+    voiceButton.addEventListener("click", toggleVoice);
+    nextButton.addEventListener("click", nextShot);
+    doneButton.addEventListener("click", completeShot);
+    resetButton.addEventListener("click", resetShots);
+    recordButton.addEventListener("click", toggleRecording);
+    saveButton.addEventListener("click", saveRecording);
+    returnButton.addEventListener("click", () => {
+      if (hasUnsavedRecordings() && !confirm("저장하지 않은 촬영본이 있습니다. 그래도 분석 화면으로 이동할까요?")) return;
+      if (returnUrl) window.location.href = returnUrl;
+    });
+    window.addEventListener("beforeunload", event => {
+      if (!hasUnsavedRecordings()) return;
+      event.preventDefault();
+      event.returnValue = "";
+    });
+    const initialMode = shotOrder.includes(shots[0]?.mode) ? shots[0].mode : shotOrder.includes(params.get("mode")) ? params.get("mode") : "topview";
+    statusPanel.querySelector("h1").textContent = projectName;
+    if (!window.isSecureContext) {
+      statusPanel.querySelector("p").insertAdjacentHTML("afterend", '<p class="secure-note">현재 주소는 보안 연결이 아니어서 휴대폰 카메라가 차단될 수 있습니다. HTTPS 주소로 여세요.</p>');
+    }
+    modeSelect.value = initialMode;
+    applyMode(initialMode);
+  </script>
+</body>
+</html>
