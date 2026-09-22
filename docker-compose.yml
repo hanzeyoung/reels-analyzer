@@ -1,0 +1,37 @@
+services:
+  app:
+    build: .
+    env_file: .env
+    expose:
+      - "8501"
+    volumes:
+      - reel_data:/app/user_reels
+      - reel_reports:/app/reports
+      - reel_logs:/app/logs
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: ["python", "scripts/run_job_worker.py"]
+    env_file: .env
+    volumes:
+      - reel_data:/app/user_reels
+      - reel_reports:/app/reports
+      - reel_logs:/app/logs
+    restart: unless-stopped
+
+  gateway:
+    image: nginx:1.27-alpine
+    depends_on:
+      - app
+    ports:
+      - "8080:80"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./mobile_coach:/srv/mobile_coach:ro
+    restart: unless-stopped
+
+volumes:
+  reel_data:
+  reel_reports:
+  reel_logs:

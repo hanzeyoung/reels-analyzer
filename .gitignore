@@ -1,13 +1,63 @@
+# 환경변수 (절대 GitHub에 올리면 안 됨!)
 .env
-.venv/
+
+# Python
 __pycache__/
-*.pyc
-.mypy_cache/
-.ruff_cache/
-.pytest_cache/
+*.py[cod]
 *.egg-info/
+dist/
+build/
+.eggs/
+*.egg
 
-node_modules/
-frontend/dist/
+# 가상환경
+venv/
+.venv/
+.venv311/
+env/
+.python-packages/
+.python-test-packages/
+.python-packages312/
+.tmp/
+_archive/
 
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 임시 파일
 *.log
+*.tmp
+/tmp/
+.pytest_cache/
+.pytest-run-*/
+
+# Streamlit
+.streamlit/secrets.toml
+videos/
+user_reels/
+
+# Generated analysis artifacts
+reports/*.md
+files/test_frames/
+files/test_weighted_frames/
+files/test_app_weighted_frames/
+files/smoke_frames/
+videos_verify*/
+
+# Legacy local copies kept out of the active app path
+reels-analyzer/
+[{]app/
+venv/
+
+# Local runtimes, operational logs, and generated previews
+.venv-*/
+logs/
+reports/
+.env.*
+!.env.example

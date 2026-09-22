@@ -1,0 +1,40 @@
+# 핵심 프레임워크
+streamlit==1.35.0
+
+# Meta Graph API
+requests==2.32.3
+
+# Google Gemini
+google-generativeai==0.7.2
+
+# 영상 프레임 추출 (ffmpeg 래퍼)
+# ffmpeg은 별도 시스템 설치 필요: brew install ffmpeg / apt install ffmpeg
+imageio-ffmpeg==0.6.0
+
+# 중복 프레임 제거
+imagehash==4.3.1
+
+# Supabase
+supabase==2.4.6
+
+# 환경변수
+python-dotenv==1.0.1
+
+# 데이터 처리
+pandas==2.2.2
+numpy==1.26.4
+
+# 시각화 (대시보드)
+plotly==5.22.0
+
+# HTTP 클라이언트
+httpx==0.27.0
+
+# 이미지 처리
+Pillow==10.3.0
+
+# OpenAI (NLP 보조)
+openai==1.35.3
+
+# 테스트
+pytest==9.1.1

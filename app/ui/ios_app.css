@@ -1,0 +1,22 @@
+/* Compact presentation has a persistent five-destination bottom tab bar. */
+.block-container{max-width:480px!important;padding:1.25rem 1.25rem calc(7.5rem + env(safe-area-inset-bottom))!important}
+[data-testid="stSidebar"],[data-testid="collapsedControl"]{display:none!important}
+[data-testid="stHorizontalBlock"]{flex-wrap:wrap}
+[data-testid="column"]{width:100%!important;flex:1 1 100%!important;min-width:0!important}
+[data-testid="stVerticalBlock"]:has(> .element-container .ios-toolbar-marker) [data-testid="column"]{flex:1 1 0!important;width:auto!important}
+[data-testid="stVerticalBlock"]:has(> .element-container .ios-toolbar-marker) [data-testid="column"]:first-child{flex:1.8 1 0!important}
+.ios-wordmark{font-size:.9375rem;gap:6px}.ios-wordmark svg{width:19px}
+[role="radiogroup"][aria-label="주요 메뉴"]{position:fixed;bottom:calc(16px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:min(calc(100vw - 24px),440px);z-index:99;display:flex;flex-wrap:nowrap;justify-content:space-between;gap:2px;padding:7px;background:var(--glass);backdrop-filter:blur(24px) saturate(160%);border:1px solid var(--border);border-radius:26px;box-shadow:0 8px 32px #00000016}
+[role="radiogroup"][aria-label="주요 메뉴"] label{flex:1;flex-direction:column;justify-content:center;min-width:0;min-height:57px;gap:4px;padding:5px 0;border-radius:19px}
+[role="radiogroup"][aria-label="주요 메뉴"] label p{font-size:.625rem!important;white-space:nowrap;line-height:1.2;font-weight:500}
+[role="radiogroup"][aria-label="주요 메뉴"] label::before{width:22px;height:22px}
+.rl-head h1{font-size:2rem!important}.rl-head{margin:.4rem 0;padding-bottom:.5rem}.rl-head p{font-size:.875rem}
+.ios-focus{min-height:150px;padding-right:75px}.ios-focus h2{font-size:1.5rem!important}.ios-focus-art{width:64px;height:84px}
+[data-testid="stVerticalBlockBorderWrapper"]:has(>div>[data-testid="stVerticalBlock"]>.element-container .ios-focus-marker){padding:1.4rem;min-height:0}
+.ios-goal{min-height:0;padding:1.25rem;display:grid;grid-template-columns:1fr auto;grid-template-rows:auto auto;text-align:left;column-gap:16px}
+.ios-goal-top{grid-column:1;display:block;margin:0}.ios-goal-top small{display:block;margin-top:5px}
+.ios-goal .ios-ring{grid-column:2;grid-row:1 / 3;width:84px;height:84px;padding:6px;text-align:center}
+.ios-ring strong{font-size:1.55rem}.ios-ring small{font-size:.6875rem}.ios-goal p{grid-column:1;margin:5px 0 0}
+.ios-pipeline{padding:1.1rem .4rem}.ios-pipeline-item span{font-size:.6875rem}.ios-pipeline-item b{font-size:1.4rem}
+.rl-row{grid-template-columns:1fr;gap:.4rem}
+[data-testid="stVerticalBlockBorderWrapper"]:has(>div>[data-testid="stVerticalBlock"]>.element-container .ios-navigation-marker){height:0;min-height:0;margin:0;padding:0}
