@@ -1,4 +1,4 @@
-# Reel Lab — iOS 디자인 리디자인
+# Reels-analyzer — iOS 디자인 리디자인
 
 ## 문제와 방향
 
@@ -6,7 +6,7 @@
 
 ## 조사한 원칙 → 구현
 
-| Apple의 기준 | Reel Lab에 적용한 결정 |
+| Apple의 기준 | Reels-analyzer에 적용한 결정 |
 | --- | --- |
 | [Typography](https://developer.apple.com/design/human-interface-guidelines/typography): 크기·굵기·색으로 계층 구성, 적은 수의 글꼴 사용 | 큰 제목 34px, 섹션 22px, 본문 16px, 보조 문구 13px. 과도한 대문자·자간·초굵은 글자 제거. 제목은 짧고 본문은 읽기 편한 줄 간격 적용. |
 | [Materials](https://developer.apple.com/design/human-interface-guidelines/materials): 반투명 소재는 조작·내비게이션 계층에 집중 | 사이드바와 앱 하단 탭에만 블러 적용. 콘텐츠는 불투명한 그룹형 표면. 웹의 블러로 원칙을 해석한 것이며 네이티브 Liquid Glass 구현은 아님. |

@@ -1,6 +1,6 @@
 # Privacy And Data Retention
 
-Reel Lab processes uploaded videos, Instagram account metrics, generated analyses, store profiles, and optional audio-license evidence.
+Reels-analyzer processes uploaded videos, Instagram account metrics, generated analyses, store profiles, and optional audio-license evidence.
 
 ## Storage
 

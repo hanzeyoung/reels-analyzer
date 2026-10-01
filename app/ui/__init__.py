@@ -1,1 +1,1 @@
-"""Product-facing Streamlit views for Reel Lab."""
+"""Product-facing Streamlit views for Reels-analyzer."""

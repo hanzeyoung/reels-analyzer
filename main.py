@@ -72,7 +72,7 @@ from app.db.supabase_client import configure_auth_session, save_analysis_for_ins
 from app.ui.workspace import render_workspace
 from app.ui.appearance import appearance_controls, render_navigation
 
-st.set_page_config(page_title="Reel Lab | 릴스 성장 워크스페이스", page_icon="🎬", layout="wide")
+st.set_page_config(page_title="Reels-analyzer | 릴스 성장 워크스페이스", page_icon="🎬", layout="wide")
 init_error_tracking("streamlit-app")
 
 BASE_USER_REELS_DIR = Path("user_reels")
@@ -980,7 +980,7 @@ def enforce_app_login() -> str:
         """
         <div class="page-heading">
           <div class="page-kicker">SECURE WORKSPACE</div>
-          <h1>Reel Lab 로그인</h1>
+          <h1>Reels-analyzer 로그인</h1>
           <p>매장 데이터와 Instagram 분석 결과를 계정별로 안전하게 분리합니다.</p>
         </div>
         """,
@@ -2202,6 +2202,8 @@ workspace_context = {
     "meta_oauth_ready": all(has_env(name) for name in ["META_APP_ID", "META_APP_SECRET", "META_REDIRECT_URI"]),
     "meta_token_present": bool(get_env("META_ACCESS_TOKEN") or st.session_state.get("meta_access_token")),
     "build_oauth_url": build_oauth_url,
+    "oauth_state_path": BASE_USER_REELS_DIR / "oauth_states.json",
+    "oauth_owner": AUTH_USER_ID or "local",
     "exchange_oauth": exchange_authorization_code,
     "save_meta_token": lambda token, payload: (
         save_encrypted_token(

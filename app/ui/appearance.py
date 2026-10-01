@@ -45,7 +45,7 @@ def appearance_controls():
     with st.container():
         st.markdown('<span class="ios-toolbar-marker"></span>', unsafe_allow_html=True)
         brand, web, app, theme, settings = st.columns([3.4, 1, 1, 1.4, .8], gap="small")
-        brand.markdown('<div class="ios-wordmark">' + icon("Studio", 23) + '<span>Reel Lab</span></div>', unsafe_allow_html=True)
+        brand.markdown('<div class="ios-wordmark">' + icon("Studio", 23) + '<span>Reels-analyzer</span></div>', unsafe_allow_html=True)
         for column, label, value in ((web, "웹", "web"), (app, "앱", "app")):
             column.button(label, key=f"layout_{value}", use_container_width=True,
                           type="primary" if st.session_state.layout == value else "secondary",
@@ -74,7 +74,7 @@ def render_navigation(app_layout):
     with (st.container() if app_layout else st.sidebar):
         st.markdown('<span class="ios-navigation-marker"></span>', unsafe_allow_html=True)
         if not app_layout:
-            st.markdown('<div class="ios-sidebar-brand"><span class="ios-app-icon">' + icon("Studio", 27) + '</span><div>Reel Lab<small>나의 크리에이티브 스튜디오</small></div></div><div class="ios-nav-caption">작업 공간</div>', unsafe_allow_html=True)
+            st.markdown('<div class="ios-sidebar-brand"><span class="ios-app-icon">' + icon("Studio", 27) + '</span><div>Reels-analyzer<small>나의 크리에이티브 스튜디오</small></div></div><div class="ios-nav-caption">작업 공간</div>', unsafe_allow_html=True)
         st.radio("주요 메뉴", NAV_ITEMS, key="workspace_nav", format_func=NAV_LABELS.get,
                  horizontal=app_layout, label_visibility="collapsed", on_change=_nav_changed)
         if not app_layout:

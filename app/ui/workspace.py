@@ -7,6 +7,7 @@ import hashlib
 import html
 import json
 import re
+import time
 from urllib.parse import quote
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -19,12 +20,14 @@ import streamlit.components.v1 as components
 from app.ui.appearance import NAV_LABELS, STAGE_NAMES, icon
 
 from app.core.audio_rights import recommend_audio_options
+from app.core.oauth_state import consume_state, issue_state
 from app.core.content_projects import PROJECT_STAGES, create_project, list_projects, pipeline_counts, update_project
 from app.core.performance_insights import build_account_baseline, compare_snapshot_windows, load_performance_history, normalize_insights
 from app.core.signal_studies import add_signal, build_signal_synthesis, build_visual_synthesis, load_study, replace_signals, save_visual_analysis
 from app.api.guide_media import download_flux_guide, generate_elevenlabs_voiceover, generate_flux_guide
 
 
+OAUTH_REISSUE_SECONDS = 12 * 60
 STAGE_HINTS = {
     "idea": "대본을 만들어 아이디어를 구체화해 보세요.",
     "script": "대본을 다듬고 촬영 계획으로 넘어가 보세요.",
@@ -70,7 +73,7 @@ def _save_settings(path, values):
 
 def _header(title, subtitle):
     label = "오늘의 스튜디오" if title == "Home" else NAV_LABELS.get(title, title)
-    kicker = "" if title == "Home" else '<div class="rl-kicker">Reel Lab · 나의 작업 공간</div>'
+    kicker = "" if title == "Home" else '<div class="rl-kicker">Reels-analyzer · 나의 작업 공간</div>'
     st.markdown(
         f'<header class="rl-head">{kicker}<h1>{_safe(label)}</h1><p>{_safe(subtitle)}</p></header>',
         unsafe_allow_html=True,
@@ -1002,10 +1005,11 @@ def settings(ctx):
     else:
         callback_code = st.query_params.get("code", "")
         callback_state = st.query_params.get("state", "")
-        expected_state = st.session_state.get("meta_oauth_state", "")
+        state_path, owner = ctx["oauth_state_path"], ctx["oauth_owner"]
         if callback_code and not st.session_state.get("meta_access_token"):
-            if callback_state != expected_state:
-                st.error("Instagram 연결 상태를 확인할 수 없습니다. Connect Instagram을 다시 선택하세요.")
+            # Instagram에서 돌아오면 새 세션이라 state는 서버에 일회용으로 저장해 둔다. 비어 있거나 만료·재사용·타인 것이면 거부.
+            if not consume_state(state_path, callback_state, owner):
+                st.error("Instagram 연결 상태를 확인할 수 없습니다. 아래 'Instagram 연결하기'로 다시 진행해 주세요.")
             else:
                 try:
                     payload = ctx["exchange_oauth"](callback_code)
@@ -1019,20 +1023,21 @@ def settings(ctx):
                 except Exception as exc:
                     st.error(f"Instagram 연결 실패: {exc}")
         if st.session_state.get("meta_access_token") or ctx.get("meta_token_present"):
-            st.success("Instagram access token is available. Insights 동기화를 실행할 수 있습니다.")
+            st.success("Instagram이 연결돼 있어요. 인사이트 동기화를 실행할 수 있어요.")
         else:
-            if st.button("Instagram 연결 준비", type="primary", use_container_width=True):
+            # 링크는 화면을 열 때 만들고, 서버 저장 state가 만료되기 전에 새로 발급한다.
+            if not st.session_state.get("meta_oauth_url") or time.time() - st.session_state.get("meta_oauth_issued_at", 0) > OAUTH_REISSUE_SECONDS:
                 try:
-                    url, state = ctx["build_oauth_url"]()
+                    url, _state = ctx["build_oauth_url"](state=issue_state(state_path, owner))
                     st.session_state["meta_oauth_url"] = url
-                    st.session_state["meta_oauth_state"] = state
-                    st.rerun()
+                    st.session_state["meta_oauth_issued_at"] = time.time()
                 except Exception as exc:
-                    st.error(f"연결 준비 실패: {exc}")
+                    st.session_state.pop("meta_oauth_url", None)
+                    st.error(f"연결 링크를 만들지 못했습니다: {exc}")
             oauth_url = st.session_state.get("meta_oauth_url")
             if oauth_url:
                 st.link_button("Instagram 연결하기", oauth_url, type="primary", use_container_width=True)
-                st.caption("열린 Instagram 화면에서 테스트 계정으로 직접 로그인하고 승인하세요.")
+                st.caption("열린 Instagram 화면에서 테스트 계정으로 직접 로그인하고 승인하세요. 링크는 15분 동안 유효해요.")
     st.subheader("트렌드 추적"); st.caption("Radar 검색 조건과 알림은 사용자별 파일에 저장됩니다.")
     st.subheader("데이터 및 개인정보"); st.caption("데이터 내보내기와 삭제는 계정 관리 흐름에서만 처리합니다.")
     if ctx.get("is_admin"):

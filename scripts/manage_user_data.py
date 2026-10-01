@@ -7,7 +7,7 @@ from app.core.privacy import delete_user_data, export_user_data, purge_expired_a
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Export, delete, or purge Reel Lab user data")
+    parser = argparse.ArgumentParser(description="Export, delete, or purge Reels-analyzer user data")
     subparsers = parser.add_subparsers(dest="command", required=True)
     export_parser = subparsers.add_parser("export")
     export_parser.add_argument("auth_user_id")
