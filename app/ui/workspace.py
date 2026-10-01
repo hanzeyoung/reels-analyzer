@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import calendar
+import hashlib
 import html
 import json
 import re
@@ -22,6 +23,21 @@ from app.core.content_projects import PROJECT_STAGES, create_project, list_proje
 from app.core.performance_insights import build_account_baseline, compare_snapshot_windows, load_performance_history, normalize_insights
 from app.core.signal_studies import add_signal, build_signal_synthesis, build_visual_synthesis, load_study, replace_signals, save_visual_analysis
 from app.api.guide_media import download_flux_guide, generate_elevenlabs_voiceover, generate_flux_guide
+
+
+STAGE_HINTS = {
+    "idea": "대본을 만들어 아이디어를 구체화해 보세요.",
+    "script": "대본을 다듬고 촬영 계획으로 넘어가 보세요.",
+    "shoot": "촬영 스토리보드와 음원을 확인하고 촬영을 시작해 보세요.",
+    "review": "촬영한 영상을 올려 AI 검토를 받아 보세요.",
+}
+STAGE_VIEWS = {"idea": "대본", "script": "대본", "shoot": "촬영", "review": "검토", "posted": "게시"}
+
+
+def _later_stage(item, target):
+    """Saving work may advance a project but must never pull it back a stage."""
+    current = item.get("stage") if item.get("stage") in PROJECT_STAGES else "idea"
+    return max(current, target, key=PROJECT_STAGES.index)
 
 
 def _safe(value):
@@ -74,12 +90,46 @@ def _empty(title, description, symbol="Studio"):
     st.markdown(f'<div class="ios-empty"><div class="ios-empty-icon">{icon(symbol)}</div><div><h3>{_safe(title)}</h3><p>{_safe(description)}</p></div></div>', unsafe_allow_html=True)
 
 
+def _service_rows(ctx):
+    """name, what it unlocks, ready, env var NAMES to set (never values)."""
+    meta_hint = "아래 'Instagram 계정'에서 연결하세요." if ctx.get("meta_oauth_ready") else "META_APP_ID, META_APP_SECRET, META_REDIRECT_URI"
+    return [
+        ("릴스 수집", "공통점 추출에서 공개 릴스 검색·링크 추가", bool(ctx.get("can_collect")), "APIFY_TOKEN"),
+        ("AI 영상 분석", "공통 시각 패턴 분석, 영상 검토", bool(ctx.get("can_analyze_visual")), "GEMINI_API_KEY"),
+        ("이미지 가이드", "촬영 구도 참고 이미지 생성 (선택)", bool(ctx.get("can_generate_image")), "BFL_API_KEY"),
+        ("음성 가이드", "내레이션 음성 생성 (선택)", bool(ctx.get("can_generate_voice")), "ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID"),
+        ("Instagram 실측", "인사이트·플레이북의 실제 성과 데이터", bool(ctx.get("meta_token_present")), meta_hint),
+    ]
+
+
+def _services_panel(ctx):
+    rows = _service_rows(ctx)
+    ready = sum(1 for row in rows if row[2])
+    items = "".join(
+        f'<div class="ios-service {"is-ready" if ok else ""}"><div class="ios-service-main"><b>{_safe(name)}</b><span>{_safe(role)}</span>'
+        + ("" if ok else f'<small class="ios-service-hint">필요: <code>{_safe(hint)}</code></small>')
+        + f'</div><em class="ios-pill">{"연결됨" if ok else "연결 전"}</em></div>'
+        for name, role, ok, hint in rows
+    )
+    st.markdown(f'<div class="ios-services-head"><span>{ready} / {len(rows)} 연결됨</span></div><div class="ios-services">{items}</div>', unsafe_allow_html=True)
+    if ready < len(rows):
+        st.caption("환경변수는 서버의 .env 파일에 넣은 뒤 앱을 다시 시작하면 반영돼요. 키 값은 이 화면에 표시되지 않아요.")
+
+
+def _gate_note(message):
+    """Explain a disabled action and point at Settings."""
+    st.caption(message + " 설정의 서비스 연결에서 확인할 수 있어요.")
+
+
 def _new_project_form(ctx):
     with st.form("new_project", clear_on_submit=True):
         st.markdown("### 어떤 이야기를 담아볼까요?")
         title = st.text_input("프로젝트 이름", placeholder="예: 비 오는 날, 따뜻한 크림라떼")
         idea = st.text_area("아이디어", placeholder="보여주고 싶은 장면이나 매장 이야기를 자유롭게 적어주세요.", height=100)
         create = st.form_submit_button("프로젝트 만들기", type="primary", use_container_width=True)
+    if st.button("닫기", key="close_new_project"):
+        st.session_state["show_new_project"] = False
+        st.rerun()
     if create:
         if not title.strip() and not idea.strip():
             st.warning("프로젝트 이름이나 아이디어를 먼저 적어주세요.")
@@ -166,16 +216,26 @@ def home(ctx):
     with focus:
         with st.container(border=True):
             title = active.get("title") if active else "작은 아이디어,\n새로운 가능성."
-            description = "새로운 아이디어를 프로젝트로 만들고 대본과 촬영 계획을 완성해 보세요."
+            eyebrow = "이어서 작업하기" if active else "프로젝트 만들기"
+            description = STAGE_HINTS.get(active.get("stage"), STAGE_HINTS["idea"]) if active else "새로운 아이디어를 프로젝트로 만들고 대본과 촬영 계획을 완성해 보세요."
             st.markdown(
                 f'<span class="ios-focus-marker"></span><div class="ios-focus">'
-                f'<div class="ios-eyebrow">{icon("Studio", 18)}프로젝트 만들기</div>'
+                f'<div class="ios-eyebrow">{icon("Studio", 18)}{eyebrow}</div>'
                 f'<h2>{_safe(title).replace(chr(10), "<br>")}</h2>'
                 f'<p>{_safe(description)}</p><div class="ios-focus-art">{icon("Studio", 64)}</div></div>',
                 unsafe_allow_html=True,
             )
             st.markdown('<span class="ios-hero-create-marker"></span>', unsafe_allow_html=True)
-            if st.button("+", key="hero_create_project", help="새 프로젝트 만들기"):
+            if active:
+                resume, create, _spacer = st.columns([1, 1, 1.2], gap="small")
+                if resume.button("이어서 작업하기", key="hero_resume_project", type="primary", use_container_width=True):
+                    st.session_state["active_project_id"] = active["id"]
+                    st.session_state["studio_view_next"] = STAGE_VIEWS.get(active.get("stage"), "대본")
+                    _go("Studio")
+                new_clicked = create.button("새 프로젝트", key="hero_create_project", use_container_width=True)
+            else:
+                new_clicked = st.button("새 프로젝트 만들기", key="hero_create_project", type="primary")
+            if new_clicked:
                 st.session_state["show_new_project"] = True
                 st.rerun()
     with progress:
@@ -207,6 +267,7 @@ def home(ctx):
                     target = next((item for item in projects if item.get("stage") == stage), None)
                     if target:
                         st.session_state["active_project_id"] = target["id"]
+                        st.session_state["studio_view_next"] = STAGE_VIEWS.get(stage, "대본")
                         _go("Studio")
                     else:
                         st.session_state["home_notice"] = f"{STAGE_NAMES[stage]} 단계의 프로젝트가 없습니다."
@@ -365,6 +426,8 @@ def _render_study_basket(study, query, ctx):
             use_container_width=True,
             disabled=not ctx["can_analyze_visual"] or not ready,
         )
+        if not ctx["can_analyze_visual"]:
+            _gate_note("AI 분석 서비스가 연결되지 않았어요.")
         if len(items) < 2:
             st.info("공통 패턴을 만들려면 분석 가능한 릴스가 두 개 이상 필요합니다.")
         elif len(analyzable_items) < 2:
@@ -428,7 +491,7 @@ def radar(ctx):
             st.error(f"릴스 검색에 실패했습니다: {exc}")
     if not ctx["can_collect"]:
         st.caption("설정에서 수집 서비스를 연결하면 검색을 시작할 수 있어요.")
-        if st.button("서비스 연결하기", key="radar_connect"):
+        if st.button("설정 열기", key="radar_connect"):
             _go("Settings")
     snapshot = st.session_state.get("market_snapshot")
     if snapshot and snapshot.get("query") != query.strip():
@@ -462,6 +525,8 @@ def radar(ctx):
             use_container_width=True,
             disabled=not ctx["can_collect"],
         )
+    if not ctx["can_collect"]:
+        _gate_note("릴스 수집 서비스가 연결되지 않아 링크를 추가할 수 없어요.")
     if add_url:
         if not reel_url.strip():
             st.warning("추가할 Instagram 릴스 링크를 입력해주세요.")
@@ -571,7 +636,7 @@ def _project_tab(item, ctx):
         hook = st.text_area("첫 문장", item.get("hook", ""), height=70, placeholder="첫 2초에 손님이 멈출 이유")
         hook_save = st.form_submit_button("첫 문장 저장", use_container_width=True)
     if hook_save:
-        update_project(item["id"], {"hook": hook, "stage": "script"}, ctx["projects_path"])
+        update_project(item["id"], {"hook": hook, "stage": _later_stage(item, "script")}, ctx["projects_path"])
         st.rerun()
 
     st.subheader("추천 대본")
@@ -580,7 +645,7 @@ def _project_tab(item, ctx):
     if variants_are_short:
         if st.button("전체 대본 만들기", use_container_width=True):
             full_variants = _build_full_variants(item)
-            update_project(item["id"], {"script_variants": full_variants, "script": full_variants["sales"], "stage": "script"}, ctx["projects_path"])
+            update_project(item["id"], {"script_variants": full_variants, "script": full_variants["sales"], "stage": _later_stage(item, "script")}, ctx["projects_path"])
             st.rerun()
     variant_names = {"sales": "상품 소개", "story": "스토리", "curiosity": "호기심"}
     variant_key = st.radio(
@@ -591,10 +656,10 @@ def _project_tab(item, ctx):
     segments = _script_segments(current_text)
     st.markdown(_segment_cards(segments, "대본을 만들면 초 구간별 카드가 여기에 표시됩니다."), unsafe_allow_html=True)
     with st.expander(f"{variant_names[variant_key]} 대본 문구 수정"):
-        edited_text = st.text_area("초 구간마다 한 줄씩 입력", current_text, key=f"variant_{item['id']}_{variant_key}", height=220, label_visibility="collapsed")
+        edited_text = st.text_area("초 구간마다 한 줄씩 입력", current_text, key=f"variant_{item['id']}_{variant_key}_{hashlib.md5(current_text.encode()).hexdigest()[:8]}", height=220, label_visibility="collapsed")
         if st.button("수정한 대본 저장", key=f"variant_save_{item['id']}_{variant_key}", use_container_width=True):
             values = {**variants, variant_key: edited_text}
-            update_project(item["id"], {"script_variants": values, "script": values.get("sales", ""), "stage": "script"}, ctx["projects_path"])
+            update_project(item["id"], {"script_variants": values, "script": values.get("sales", ""), "stage": _later_stage(item, "script")}, ctx["projects_path"])
             st.rerun()
 
     st.subheader("촬영 목록")
@@ -610,7 +675,7 @@ def _project_tab(item, ctx):
             shot_save = st.form_submit_button("촬영 목록 저장", use_container_width=True)
         if shot_save:
             values = [_clean_shot_instruction(line) for line in shots.splitlines()]
-            update_project(item["id"], {"shot_list": [value for value in values if value][:5], "stage": "shoot"}, ctx["projects_path"])
+            update_project(item["id"], {"shot_list": [value for value in values if value][:5], "stage": _later_stage(item, "shoot")}, ctx["projects_path"])
             st.rerun()
 
     source = item.get("source") or {}
@@ -628,10 +693,10 @@ def _project_tab(item, ctx):
         values = {**variants, variant_key: current_text}
         update_project(
             item["id"],
-            {"script": current_text, "script_variants": values, "shot_list": [shot for shot in selected_shots if shot][:5], "stage": "shoot"},
+            {"script": current_text, "script_variants": values, "shot_list": [shot for shot in selected_shots if shot][:5], "stage": _later_stage(item, "shoot")},
             ctx["projects_path"],
         )
-        st.session_state["studio_view"] = "촬영"
+        st.session_state["studio_view_next"] = "촬영"
         st.rerun()
 
     st.subheader("제작 가이드")
@@ -645,7 +710,10 @@ def _project_tab(item, ctx):
     image_path = image.get("path", "")
     if image_path and Path(image_path).exists():
         st.image(image_path, caption="구도 참고 이미지")
-    if ctx.get("can_generate_image") and st.button("이미지 가이드 만들기", use_container_width=True):
+    if not ctx.get("can_generate_image"):
+        st.button("이미지 가이드 만들기", use_container_width=True, disabled=True, key=f"image_guide_off_{item['id']}")
+        _gate_note("이미지 생성 서비스가 연결되지 않았어요.")
+    elif st.button("이미지 가이드 만들기", use_container_width=True):
         try:
             with st.spinner("프로젝트에 맞는 구도 이미지를 만드는 중입니다..."):
                 image = generate_flux_guide(guide_prompt)
@@ -660,8 +728,11 @@ def _project_tab(item, ctx):
     voice_path = voice.get("path", "")
     if voice_path and Path(voice_path).exists():
         st.audio(voice_path, format="audio/mpeg")
-    if ctx.get("can_generate_voice"):
-        voice_text = st.text_area("내레이션 대본", voice.get("text") or current_text, key=f"voice_{item['id']}", height=90)
+    if not ctx.get("can_generate_voice"):
+        st.button("음성 가이드 만들기", use_container_width=True, disabled=True, key=f"voice_guide_off_{item['id']}")
+        _gate_note("음성 생성 서비스가 연결되지 않았어요.")
+    else:
+        voice_text = st.text_area("내레이션 대본", voice.get("text") or current_text, key=f"voice_{item['id']}_{hashlib.md5(current_text.encode()).hexdigest()[:8]}", height=90)
         if st.button("음성 가이드 만들기", use_container_width=True):
             try:
                 with st.spinner("음성 가이드를 만드는 중입니다..."):
@@ -748,7 +819,7 @@ def _analyze_tab(item, ctx):
             try:
                 with st.spinner("Analyzing the cut..."): result = ctx["analyze_file"](target, caption=item.get("script", ""))
                 notes = [{"text":text, "done":False} for text in (result.get("priority_actions") or [])]
-                update_project(item["id"], {"analysis":result, "edit_notes":notes, "stage":"review"}, ctx["projects_path"]); st.rerun()
+                update_project(item["id"], {"analysis":result, "edit_notes":notes, "stage":_later_stage(item, "review")}, ctx["projects_path"]); st.rerun()
             except Exception as exc: st.error(f"Analysis could not finish: {exc}")
         analysis = item.get("analysis") or {}
         if analysis: st.metric("AI 예상 점수", f"{float(analysis.get('overall_score') or 0):.0f}")
@@ -796,7 +867,7 @@ def studio(ctx):
     if notice:
         st.success(notice)
     if not projects:
-        _empty("첫 프로젝트를 시작해 보세요", "홈에서 아이디어를 적거나, 발견에서 마음에 드는 릴스를 가져오세요.")
+        _empty("첫 프로젝트를 시작해 보세요", "홈에서 아이디어를 적거나, 공통점 추출에서 마음에 드는 릴스를 가져오세요.")
         if st.button("홈으로 이동", type="primary", use_container_width=True): _go("Home")
         return
     ids = [item["id"] for item in projects]
@@ -804,9 +875,12 @@ def studio(ctx):
     selected = st.selectbox("프로젝트", ids, ids.index(current), format_func=lambda value:next(item["title"] for item in projects if item["id"] == value))
     st.session_state["active_project_id"] = selected
     item = _project(projects, selected)
+    pending_view = st.session_state.pop("studio_view_next", None)
+    if pending_view:
+        st.session_state["studio_view"] = pending_view
     view = st.radio(
         "스튜디오 단계",
-        ["대본", "촬영", "게시"],
+        ["대본", "촬영", "검토", "게시"],
         horizontal=True,
         key="studio_view",
         label_visibility="collapsed",
@@ -815,6 +889,8 @@ def studio(ctx):
         _project_tab(item, ctx)
     elif view == "촬영":
         _shoot_tab(item, ctx)
+    elif view == "검토":
+        _analyze_tab(item, ctx)
     else:
         _publish_tab(item, ctx)
 
@@ -823,14 +899,31 @@ def _measured(ctx):
     return [item for item in ctx["load_user_reels"](ctx["business_type"]) if item.get("출처") == "Meta 실측"]
 
 
+PERIOD_DAYS = {"최근 7일": 7, "최근 30일": 30, "전체 기간": None}
+
+
+def _in_period(uploaded, days):
+    if days is None:
+        return True
+    try:
+        moment = uploaded if isinstance(uploaded, datetime) else datetime.fromisoformat(str(uploaded))
+        return moment.replace(tzinfo=None) >= datetime.now() - timedelta(days=days)
+    except (TypeError, ValueError):
+        return True
+
+
 def insights(ctx):
     _header("Insights", "게시한 릴스에서 다음 제작 결정을 찾습니다")
-    measured = _measured(ctx)
+    all_measured = _measured(ctx)
     posted = [item for item in list_projects(ctx["projects_path"]) if item.get("stage") == "posted"]
-    st.selectbox("조회 기간", ["최근 7일", "최근 30일", "전체 기간"])
+    period = st.selectbox("조회 기간", list(PERIOD_DAYS))
+    measured = [item for item in all_measured if _in_period(item.get("업로드"), PERIOD_DAYS[period])]
+    if all_measured and not measured:
+        st.info(f"{period} 안에 측정된 릴스가 없어요. 기간을 넓혀 보세요.")
+        return
     if not measured:
         _empty("성장의 기록이 시작될 곳", "Instagram을 연결하면 게시한 릴스의 실제 성과를 확인할 수 있어요.", "Insights")
-        if st.button("Instagram 연결하기", key="insights_connect"):
+        if st.button("설정에서 Instagram 연결하기", key="insights_connect"):
             _go("Settings")
         for item in posted: st.markdown(f'<div class="rl-row"><b>{_safe(item.get("title"))}</b><span>Posted</span><span>Waiting for Meta sync</span><span>{_safe(item.get("published_at"))}</span></div>', unsafe_allow_html=True)
         return
@@ -851,8 +944,9 @@ def insights(ctx):
         text = " · ".join(f"{hours}h: +{value['views_delta']:,} views" for hours,value in changes.items() if value)
         st.caption(f"{item.get('title')}: {text or 'Waiting for Meta sync'}")
     if st.button("좋은 패턴을 플레이북에 저장", type="primary", use_container_width=True):
-        _save_playbook({"key":f"best-{best.get('릴스명', 'reel')}", "group":"worked", "label":"High-save project pattern", "sample_count":1, "lift":round(lift,1), "confidence":"provisional", "evidence":best.get("릴스명", "Meta reel")}, ctx["playbook_path"])
-        st.success("패턴을 저장했어요. 성과가 쌓이면 다시 확인해 보세요.")
+        group = "worked" if lift >= 10 else "avoid" if lift <= -10 else "uncertain"
+        _save_playbook({"key":f"best-{best.get('릴스명', 'reel')}", "group":group, "label":"저장률 높은 릴스 패턴", "sample_count":1, "lift":round(lift,1), "confidence":"provisional", "evidence":best.get("릴스명", "Meta reel")}, ctx["playbook_path"])
+        st.success({"worked": "효과가 있었던 패턴으로 저장했어요.", "avoid": "피하면 좋을 패턴으로 저장했어요.", "uncertain": "아직 근거가 약해 '조금 더 확인할 패턴'으로 저장했어요."}[group])
 
 
 def _save_playbook(pattern, path):
@@ -895,14 +989,13 @@ def playbook(ctx):
                 projects=list_projects(ctx["projects_path"]); item=_project(projects,st.session_state.get("active_project_id")) or next((row for row in projects if row.get("stage")!="posted"),None)
                 if not item: st.info("먼저 프로젝트를 만들어 주세요.")
                 else:
-                    update_project(item["id"], {"concept":(item.get("concept","")+"\nApply: "+pattern["label"]).strip(),"stage":"script"},ctx["projects_path"]); st.session_state["active_project_id"]=item["id"]; _go("Studio")
+                    update_project(item["id"], {"concept":(item.get("concept","")+"\n적용 패턴: "+pattern["label"]).strip(),"stage":_later_stage(item, "script")},ctx["projects_path"]); st.session_state["active_project_id"]=item["id"]; st.session_state["studio_notice"]=f"'{item.get('title') or '제목 없는 프로젝트'}' 프로젝트에 '{pattern['label']}' 패턴을 적용했어요."; _go("Studio")
 
 
 def settings(ctx):
     _header("Settings", "내 작업 공간을 편안하게, 필요한 연결을 한곳에서.")
     st.subheader("서비스 연결")
-    services = "".join(f'<div class="ios-service {"is-ready" if ready else ""}"><span>{_safe(name)}</span><small><i></i>{"연결됨" if ready else "연결 전"}</small></div>' for name, ready in ctx["service_status"])
-    st.markdown(f'<div class="ios-services">{services}</div>', unsafe_allow_html=True)
+    _services_panel(ctx)
     st.subheader("Instagram 계정")
     if not ctx.get("meta_oauth_ready"):
         st.info("META_APP_ID, META_APP_SECRET, META_REDIRECT_URI를 .env에 넣으면 안전한 Instagram 연결을 시작할 수 있습니다.")

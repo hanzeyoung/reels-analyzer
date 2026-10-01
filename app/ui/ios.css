@@ -191,23 +191,19 @@ h2{font-size:1.65rem!important;margin-left:0!important}
 h3{font-size:1.25rem!important;margin-left:0!important}
 
 /* Home project creation card. */
-[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-hero-create-marker){position:relative;overflow:hidden}
+[data-testid="stVerticalBlockBorderWrapper"]:has(>div>[data-testid="stVerticalBlock"]>.element-container .ios-hero-create-marker){position:relative;overflow:hidden}
 .ios-hero-create-marker,.ios-goal-card-marker,.ios-pipeline-marker,.ios-project-click-marker{display:none}
-[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-hero-create-marker) [data-testid="stButton"]{position:absolute;right:1.65rem;top:5.5rem;width:112px;z-index:5;opacity:0;transition:opacity .2s,transform .2s}
-[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-hero-create-marker):hover [data-testid="stButton"],[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-hero-create-marker) [data-testid="stButton"]:focus-within{opacity:1}
-[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-hero-create-marker) [data-testid="stButton"] button{height:126px;border-radius:24px;background:color-mix(in srgb,var(--accent) 88%,transparent);color:#fff;font-size:2.25rem!important;box-shadow:0 12px 35px #007aff35}
 .ios-focus-art{width:112px;height:126px;top:26px;transition:opacity .2s,transform .2s}
 .ios-focus-art svg{width:64px;height:64px}
-[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-hero-create-marker):hover .ios-focus-art{opacity:.16;transform:rotate(5deg) scale(.96)}
 .ios-focus{padding-right:132px}
 .ios-focus .ios-eyebrow{font-size:1rem}
 
 /* Weekly goal and calendar. */
-[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-goal-card-marker){background:var(--surface);border:0;border-radius:24px;min-height:286px;padding:1.35rem 1.5rem}
-[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-goal-card-marker) [data-testid="stVerticalBlock"]{gap:.25rem}
+[data-testid="stVerticalBlockBorderWrapper"]:has(>div>[data-testid="stVerticalBlock"]>.element-container .ios-goal-card-marker){background:var(--surface);border:0;border-radius:24px;min-height:286px;padding:1.35rem 1.5rem}
+[data-testid="stVerticalBlockBorderWrapper"]:has(>div>[data-testid="stVerticalBlock"]>.element-container .ios-goal-card-marker) [data-testid="stVerticalBlock"]{gap:.25rem}
 .ios-goal-title{text-align:center;font-size:1.3rem;font-weight:750;letter-spacing:-.03em;padding:.45rem 0}
-[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-goal-card-marker) [data-testid="stButton"] button{opacity:.48;background:transparent;font-size:1.35rem!important;padding:0}
-[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-goal-card-marker) [data-testid="stButton"] button:hover{opacity:1}
+[data-testid="stVerticalBlockBorderWrapper"]:has(>div>[data-testid="stVerticalBlock"]>.element-container .ios-goal-card-marker) [data-testid="stButton"] button{opacity:.48;background:transparent;font-size:1.35rem!important;padding:0}
+[data-testid="stVerticalBlockBorderWrapper"]:has(>div>[data-testid="stVerticalBlock"]>.element-container .ios-goal-card-marker) [data-testid="stButton"] button:hover{opacity:1}
 .ios-goal-ring-wrap{display:grid;place-items:center;padding:1rem 0 .35rem}
 .ios-goal-ring-wrap .ios-ring{width:146px;height:146px}
 .ios-goal-ring-wrap .ios-ring strong span{font-size:1.05rem;color:var(--muted);letter-spacing:0}
@@ -225,10 +221,10 @@ h3{font-size:1.25rem!important;margin-left:0!important}
 [data-testid="stVerticalBlock"]:has(> .element-container .ios-pipeline-marker) [data-testid="stButton"] button{min-height:92px;background:transparent;color:var(--text);border-radius:14px}
 [data-testid="stVerticalBlock"]:has(> .element-container .ios-pipeline-marker) [data-testid="stButton"] button p{white-space:pre-line;font-size:.85rem;line-height:2;font-weight:650}
 [data-testid="stVerticalBlock"]:has(> .element-container .ios-pipeline-marker) [data-testid="stButton"] button:hover{background:var(--blue-soft);border-color:transparent;transform:translateY(-2px)}
-[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-project-click-marker){padding:0!important;transition:opacity .18s,transform .18s}
-[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-project-click-marker):hover{opacity:.68;transform:translateY(-1px)}
-[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-project-click-marker) [data-testid="stButton"] button{min-height:82px;background:transparent;border:0;color:var(--text);justify-content:flex-start;text-align:left;padding:1rem 1.25rem}
-[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-project-click-marker) [data-testid="stButton"] button p{white-space:pre-line;font-size:1rem;line-height:1.65;font-weight:650;text-align:left}
+[data-testid="stVerticalBlockBorderWrapper"]:has(>div>[data-testid="stVerticalBlock"]>.element-container .ios-project-click-marker){padding:0!important;transition:opacity .18s,transform .18s}
+[data-testid="stVerticalBlockBorderWrapper"]:has(>div>[data-testid="stVerticalBlock"]>.element-container .ios-project-click-marker):hover{opacity:.68;transform:translateY(-1px)}
+[data-testid="stVerticalBlockBorderWrapper"]:has(>div>[data-testid="stVerticalBlock"]>.element-container .ios-project-click-marker) [data-testid="stButton"] button{min-height:82px;background:transparent;border:0;color:var(--text);justify-content:flex-start;text-align:left;padding:1rem 1.25rem}
+[data-testid="stVerticalBlockBorderWrapper"]:has(>div>[data-testid="stVerticalBlock"]>.element-container .ios-project-click-marker) [data-testid="stButton"] button p{white-space:pre-line;font-size:1rem;line-height:1.65;font-weight:650;text-align:left}
 
 /* Script and storyboard readability. */
 .timeline-card-grid{grid-template-columns:1fr!important;gap:.8rem!important}
@@ -249,10 +245,96 @@ h3{font-size:1.25rem!important;margin-left:0!important}
 
 @media(max-width:760px){
  .rl-head h1{font-size:2.15rem!important}
- [data-testid="stVerticalBlockBorderWrapper"]:has(.ios-hero-create-marker) [data-testid="stButton"]{opacity:1;right:1rem;top:5.8rem;width:82px}
- [data-testid="stVerticalBlockBorderWrapper"]:has(.ios-hero-create-marker) [data-testid="stButton"] button{height:96px}
  .ios-focus-art{width:82px;height:96px;opacity:.18}.ios-focus{padding-right:86px}
  [data-testid="stVerticalBlock"]:has(> .element-container .ios-pipeline-marker) [data-testid="stHorizontalBlock"]{display:grid;grid-template-columns:repeat(2,1fr)}
  [data-testid="stVerticalBlock"]:has(> .element-container .ios-pipeline-marker) [data-testid="column"]{width:auto!important}
  .goal-calendar td{height:52px}.script-line{grid-template-columns:3.3rem 1fr}
 }
+
+/* ===== Polish layer: ambient background + glass surfaces ===== */
+html,body{background:var(--bg)}
+.stApp{background:
+  radial-gradient(52rem 38rem at 6% -6%,var(--blob-a),transparent 62%),
+  radial-gradient(46rem 36rem at 102% 4%,var(--blob-b),transparent 60%),
+  radial-gradient(50rem 42rem at 92% 108%,var(--blob-c),transparent 62%),
+  radial-gradient(38rem 30rem at -4% 102%,var(--blob-d),transparent 62%),
+  var(--bg);background-attachment:fixed}
+[data-testid="stAppViewContainer"],[data-testid="stMain"],[data-testid="stHeader"]{background:transparent}
+/* Anything that was an opaque card becomes frosted glass over the ambient background. */
+.ios-empty,.ios-services,.ios-pipeline,.rl-metric,.rl-action,.rl-signal,.rl-demo,.goal-calendar,
+[data-testid="stForm"],[data-testid="stExpander"],[data-testid="stMetric"],
+[data-testid="stVerticalBlockBorderWrapper"]:has(>div>[data-testid="stVerticalBlock"]>.element-container .ios-goal-card-marker),
+[data-testid="stVerticalBlockBorderWrapper"]:has(>div>[data-testid="stVerticalBlock"]>.element-container .ios-project-click-marker),
+[data-testid="stVerticalBlock"]:has(>.element-container .ios-pipeline-marker){
+  border:1px solid var(--card-border)!important;box-shadow:var(--card-shadow);-webkit-backdrop-filter:blur(22px) saturate(160%);backdrop-filter:blur(22px) saturate(160%)}
+[data-testid="stExpander"] details{background:transparent}
+.ios-ring-inner{background:var(--surface-solid)}
+[data-baseweb="popover"],[data-baseweb="menu"],[role="listbox"],[role="option"]{background:var(--surface-solid)!important}
+/* Production stages: label small on top, count large below. */
+[data-testid="stVerticalBlock"]:has(>.element-container .ios-pipeline-marker) [data-testid="stButton"] button p{font-size:1.9rem;line-height:1.25;font-weight:650;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+[data-testid="stVerticalBlock"]:has(>.element-container .ios-pipeline-marker) [data-testid="stButton"] button p::first-line{font-size:.8125rem;font-weight:500;color:var(--muted);letter-spacing:0}
+@media(prefers-reduced-transparency:reduce){[data-testid="stForm"],[data-testid="stExpander"],.ios-empty,.ios-pipeline{backdrop-filter:none!important;background:var(--surface-solid)!important}}
+
+/* Same card treatment for the hero; sidebar lets the background through. */
+[data-testid="stVerticalBlockBorderWrapper"]:has(>div>[data-testid="stVerticalBlock"]>.element-container .ios-focus-marker){border:1px solid var(--card-border);box-shadow:var(--card-shadow)}
+[data-testid="stSidebar"]{-webkit-backdrop-filter:blur(28px) saturate(170%);backdrop-filter:blur(28px) saturate(170%)}
+/* Select boxes: value vertically centred, 46px like the buttons. */
+[data-baseweb="select"]>div{min-height:46px;align-items:center}
+[data-baseweb="select"]>div>div{display:flex;align-items:center}
+[data-testid="stSelectbox"] [data-baseweb="select"] div[value],[data-testid="stSelectbox"] [data-baseweb="select"] [aria-selected]{line-height:1.4}
+/* Goal-card arrow: a real 44px tap target instead of a faint glyph. */
+[data-testid="stVerticalBlockBorderWrapper"]:has(>div>[data-testid="stVerticalBlock"]>.element-container .ios-goal-card-marker) [data-testid="stButton"] button{opacity:1;min-height:44px;width:44px;margin-left:auto;border-radius:50%;background:var(--surface-soft);color:var(--accent-strong);font-size:1.1rem!important}
+
+/* Hero CTA is a normal, always-visible primary button under the copy. */
+[data-testid="stVerticalBlockBorderWrapper"]:has(>div>[data-testid="stVerticalBlock"]>.element-container .ios-hero-create-marker) [data-testid="stButton"] button{width:auto;min-width:176px;padding:.55rem 1.5rem}
+.ios-focus{min-height:150px}
+
+/* Spacing + affordance fixes from the visual audit. */
+.element-container:has(>[data-testid="stMarkdownContainer"] .ios-empty){margin-bottom:.75rem}
+[data-testid="stButton"] button:not([kind="primary"]){background:var(--surface);border:1px solid var(--border);color:var(--accent-strong);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px)}
+[data-testid="stButton"] button:not([kind="primary"]):hover{background:var(--blue-soft);border-color:var(--accent)}
+[data-baseweb="select"] svg{color:var(--muted);fill:currentColor;opacity:1}
+[data-testid="stVerticalBlock"]:has(>.element-container .ios-toolbar-marker) [data-testid="column"]:nth-child(n+4) button{border:1px solid var(--border);background:var(--surface)}
+[data-testid="stVerticalBlock"]:has(>.element-container .ios-toolbar-marker) [data-testid="column"]:nth-child(n+4) button:hover{border-color:var(--accent);color:var(--accent-strong)}
+.element-container:has(.ios-empty){margin-bottom:1rem}
+/* Stage buttons sit flat inside their card; no nested boxes. */
+[data-testid="stVerticalBlock"]:has(>.element-container .ios-pipeline-marker) [data-testid="stButton"] button:not([kind="primary"]){background:transparent;border-color:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}
+[data-testid="stVerticalBlock"]:has(>.element-container .ios-pipeline-marker) [data-testid="stButton"] button:not([kind="primary"]):hover{background:var(--blue-soft)}
+[data-testid="stVerticalBlockBorderWrapper"]:has(>div>[data-testid="stVerticalBlock"]>.element-container .ios-project-click-marker) [data-testid="stButton"] button:not([kind="primary"]){background:transparent;border-color:transparent;backdrop-filter:none}
+[data-testid="stVerticalBlockBorderWrapper"]:has(>div>[data-testid="stVerticalBlock"]>.element-container .ios-goal-card-marker) [data-testid="stButton"] button:not([kind="primary"]){background:var(--surface-soft);border-color:transparent}
+/* Ring value is centred in both layouts. */
+.ios-ring-inner{align-items:center;text-align:center}
+
+/* Hero title wraps on word boundaries and balances its lines. */
+.ios-focus h2{max-width:none;word-break:keep-all;overflow-wrap:break-word;text-wrap:balance}
+/* Segmented controls (studio stage, script type): no radio dot, equal-width pills. */
+[role="radiogroup"][aria-label="스튜디오 단계"],[role="radiogroup"][aria-label="대본 유형"]{display:flex;flex-wrap:nowrap;width:100%}
+[role="radiogroup"][aria-label="스튜디오 단계"] label,[role="radiogroup"][aria-label="대본 유형"] label{flex:1 1 0;min-width:0;margin:0;justify-content:center;text-align:center}
+[role="radiogroup"][aria-label="스튜디오 단계"] label>div:first-child,[role="radiogroup"][aria-label="대본 유형"] label>div:first-child{position:absolute;opacity:0;width:1px;height:1px}
+[role="radiogroup"][aria-label="스튜디오 단계"] label p,[role="radiogroup"][aria-label="대본 유형"] label p{font-weight:600;white-space:nowrap}
+[role="radiogroup"][aria-label="스튜디오 단계"] label:has(input:checked) p,[role="radiogroup"][aria-label="대본 유형"] label:has(input:checked) p{color:var(--accent-strong)}
+[role="radiogroup"][aria-label="스튜디오 단계"] label:has(input:focus-visible),[role="radiogroup"][aria-label="대본 유형"] label:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+/* Form buttons share the secondary look. */
+[data-testid="stFormSubmitButton"] button:not([kind="primaryFormSubmit"]){background:var(--surface);border:1px solid var(--border);color:var(--accent-strong)}
+[data-testid="stFormSubmitButton"] button:not([kind="primaryFormSubmit"]):hover{background:var(--blue-soft);border-color:var(--accent)}
+/* File uploader copy in Korean. */
+[data-testid="stFileUploaderDropzoneInstructions"] span,[data-testid="stFileUploaderDropzoneInstructions"] small{display:none}
+[data-testid="stFileUploaderDropzoneInstructions"]>div::before{content:"영상을 끌어다 놓거나 파일을 선택하세요";display:block;font-size:.9375rem;color:var(--text)}
+[data-testid="stFileUploaderDropzoneInstructions"]>div::after{content:"MP4, MOV, M4V · 최대 200MB";display:block;font-size:.8125rem;color:var(--muted);margin-top:2px}
+[data-testid="stFileUploaderDropzone"] button{font-size:0!important}
+[data-testid="stFileUploaderDropzone"] button::after{content:"파일 선택";font-size:.9375rem}
+
+/* ===== Settings: service connection panel ===== */
+.ios-services-head{display:flex;justify-content:flex-end;margin:-.25rem 0 .5rem;font-size:.8125rem;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
+.ios-services{padding:.25rem 1.25rem}
+.ios-service{align-items:flex-start;padding:1rem 0}
+.ios-service-main{min-width:0;display:flex;flex-direction:column;gap:2px}
+.ios-service-main b{font-size:.9375rem;font-weight:600;color:var(--text)}
+.ios-service-main span{font-size:.8125rem;color:var(--muted);line-height:1.5}
+.ios-service-hint{margin-top:4px;font-size:.75rem;color:var(--muted)}
+.ios-service-hint code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.75rem;background:var(--surface-soft);padding:1px 6px;border-radius:6px;color:var(--text);word-break:break-all}
+.ios-pill{flex-shrink:0;font-style:normal;font-size:.75rem;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--surface-soft);color:var(--muted);white-space:nowrap}
+.ios-service.is-ready .ios-pill{background:color-mix(in srgb,var(--green) 16%,transparent);color:var(--green)}
+.element-container:has(.ios-services)+.element-container{margin-top:.6rem}
+.ios-service-hint{display:block}
+.ios-service-hint code{display:inline-block;max-width:100%}

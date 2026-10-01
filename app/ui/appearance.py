@@ -85,15 +85,19 @@ def render_navigation(app_layout):
 def appearance_styles():
     dark = st.session_state.get("theme") == "dark"
     palette = (
-        "--bg:#000000;--surface:#1c1c1e;--surface-soft:#2c2c2e;--text:#f5f5f7;"
-        "--muted:#a1a1a8;--border:#38383a;--accent:#0a84ff;--accent-strong:#64aaff;"
-        "--glass:rgba(30,30,32,.91);--hero:#142135;--hero-end:#192c46;--blue-soft:#182c46;"
+        "--bg:#05070c;--surface:rgba(28,30,36,.62);--surface-soft:#2c2c2e;--text:#f5f5f7;"
+        "--surface-solid:#1c1c1e;--muted:#a1a1a8;--border:#38383a;--accent:#0a84ff;--accent-strong:#64aaff;"
+        "--glass:rgba(16,18,24,.62);--hero:#142135;--hero-end:#192c46;--blue-soft:#182c46;"
         "--green:#6dd58c;--ring-track:#333338;color-scheme:dark;"
+        "--blob-a:rgba(10,92,214,.34);--blob-b:rgba(110,60,210,.28);--blob-c:rgba(0,150,160,.22);--blob-d:rgba(210,90,60,.12);"
+        "--card-border:rgba(255,255,255,.08);--card-shadow:0 1px 2px rgba(0,0,0,.4),0 14px 32px -16px rgba(0,0,0,.6);"
         if dark else
-        "--bg:#f5f5f7;--surface:#ffffff;--surface-soft:#f0f0f4;--text:#1d1d1f;"
+        "--bg:#f4f6fb;--surface:rgba(255,255,255,.72);--surface-solid:#ffffff;--surface-soft:#f0f0f4;--text:#1d1d1f;"
         "--muted:#6e6e73;--border:#e5e5ea;--accent:#007aff;--accent-strong:#0065d4;"
-        "--glass:rgba(250,250,252,.9);--hero:#eaf2ff;--hero-end:#f4f7ff;--blue-soft:#eaf2ff;"
+        "--glass:rgba(255,255,255,.58);--hero:#eaf2ff;--hero-end:#f4f7ff;--blue-soft:#eaf2ff;"
         "--green:#248a3d;--ring-track:#ededf2;color-scheme:light;"
+        "--blob-a:rgba(120,170,255,.42);--blob-b:rgba(196,170,255,.38);--blob-c:rgba(150,225,205,.34);--blob-d:rgba(255,200,170,.30);"
+        "--card-border:rgba(255,255,255,.7);--card-shadow:0 1px 2px rgba(20,30,60,.04),0 14px 32px -16px rgba(20,30,60,.16);"
     )
     css = Path(__file__).with_name("ios.css").read_text(encoding="utf-8")
     nav_icons = ""

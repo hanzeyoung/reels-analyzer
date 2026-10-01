@@ -27,3 +27,23 @@
 [data-testid="stVerticalBlock"]:has(> .element-container .ios-toolbar-marker) button p{font-size:.9rem!important}
 [role="radiogroup"][aria-label="주요 메뉴"] label p{font-size:.72rem!important;font-weight:650}
 .ios-focus{padding-right:96px}.ios-focus-art{width:86px;height:104px}.ios-focus-art svg{width:52px;height:52px}
+
+/* ===== App layout only: thumb-first proportions (390px reference) ===== */
+/* Goal card: title + 44px arrow stay on one row instead of stacking. */
+[data-testid="stVerticalBlockBorderWrapper"]:has(>div>[data-testid="stVerticalBlock"]>.element-container .ios-goal-card-marker) [data-testid="stHorizontalBlock"]{flex-wrap:nowrap;align-items:center;gap:.5rem}
+[data-testid="stVerticalBlockBorderWrapper"]:has(>div>[data-testid="stVerticalBlock"]>.element-container .ios-goal-card-marker) [data-testid="column"]{width:auto!important;flex:1 1 0!important}
+[data-testid="stVerticalBlockBorderWrapper"]:has(>div>[data-testid="stVerticalBlock"]>.element-container .ios-goal-card-marker) [data-testid="column"]:last-child{flex:0 0 44px!important}
+[data-testid="stVerticalBlockBorderWrapper"]:has(>div>[data-testid="stVerticalBlock"]>.element-container .ios-goal-card-marker){min-height:0;padding:1rem 1.1rem}
+.ios-goal-title{text-align:left;font-size:1.1rem}
+.ios-goal-ring-wrap{padding:.5rem 0}
+.ios-goal-ring-wrap .ios-ring{width:132px;height:132px}
+/* Five production stages in a single row. */
+[data-testid="stVerticalBlock"]:has(>.element-container .ios-pipeline-marker){padding:.5rem}
+[data-testid="stVerticalBlock"]:has(>.element-container .ios-pipeline-marker) [data-testid="stHorizontalBlock"]{display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr));gap:0}
+[data-testid="stVerticalBlock"]:has(>.element-container .ios-pipeline-marker) [data-testid="column"]{width:auto!important;min-width:0!important}
+[data-testid="stVerticalBlock"]:has(>.element-container .ios-pipeline-marker) [data-testid="stButton"] button{min-height:76px;padding:.4rem 0}
+[data-testid="stVerticalBlock"]:has(>.element-container .ios-pipeline-marker) [data-testid="stButton"] button p{font-size:1.5rem}
+[data-testid="stVerticalBlock"]:has(>.element-container .ios-pipeline-marker) [data-testid="stButton"] button p::first-line{font-size:.6875rem}
+/* Primary and secondary actions span the width. */
+[data-testid="stMain"] [data-testid="stButton"] button{width:100%}
+.ios-section-title{margin:1.75rem 0 .9rem}.ios-section-title h2,h2{font-size:1.3rem!important}
