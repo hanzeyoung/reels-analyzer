@@ -20,3 +20,10 @@
 .ios-pipeline{padding:1.1rem .4rem}.ios-pipeline-item span{font-size:.6875rem}.ios-pipeline-item b{font-size:1.4rem}
 .rl-row{grid-template-columns:1fr;gap:.4rem}
 [data-testid="stVerticalBlockBorderWrapper"]:has(>div>[data-testid="stVerticalBlock"]>.element-container .ios-navigation-marker){height:0;min-height:0;margin:0;padding:0}
+
+
+/* Larger compact-view labels requested for the shared app toolbar. */
+.ios-wordmark{font-size:1.1rem;gap:7px}.ios-wordmark svg{width:22px}
+[data-testid="stVerticalBlock"]:has(> .element-container .ios-toolbar-marker) button p{font-size:.9rem!important}
+[role="radiogroup"][aria-label="주요 메뉴"] label p{font-size:.72rem!important;font-weight:650}
+.ios-focus{padding-right:96px}.ios-focus-art{width:86px;height:104px}.ios-focus-art svg{width:52px;height:52px}

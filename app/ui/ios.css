@@ -176,3 +176,83 @@ button [data-testid="stMarkdownContainer"],[role="radiogroup"][aria-label="주�
 [data-baseweb="tab-list"]::before{background:linear-gradient(to left,transparent,var(--bg))!important}
 .stTabs::after{background:linear-gradient(to right,transparent,var(--bg))!important}
 .stTabs::before{background:linear-gradient(to left,transparent,var(--bg))!important}
+
+
+/* 2026 workspace interaction refresh */
+.ios-wordmark{font-size:1.3rem}
+[data-testid="stVerticalBlock"]:has(> .element-container .ios-toolbar-marker) button p{font-size:1rem;font-weight:650}
+[role="radiogroup"][aria-label="주요 메뉴"] label p{font-size:1.05rem;font-weight:600}
+.ios-sidebar-brand{font-size:1.3rem}
+.rl-head{padding-top:.2rem;margin-bottom:1.25rem}
+.rl-head h1{font-size:2.5rem!important}
+.ios-section-title{margin:2.5rem 0 1.25rem;align-items:center}
+.ios-section-title h2{font-size:1.65rem!important}
+h2{font-size:1.65rem!important;margin-left:0!important}
+h3{font-size:1.25rem!important;margin-left:0!important}
+
+/* Home project creation card. */
+[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-hero-create-marker){position:relative;overflow:hidden}
+.ios-hero-create-marker,.ios-goal-card-marker,.ios-pipeline-marker,.ios-project-click-marker{display:none}
+[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-hero-create-marker) [data-testid="stButton"]{position:absolute;right:1.65rem;top:5.5rem;width:112px;z-index:5;opacity:0;transition:opacity .2s,transform .2s}
+[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-hero-create-marker):hover [data-testid="stButton"],[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-hero-create-marker) [data-testid="stButton"]:focus-within{opacity:1}
+[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-hero-create-marker) [data-testid="stButton"] button{height:126px;border-radius:24px;background:color-mix(in srgb,var(--accent) 88%,transparent);color:#fff;font-size:2.25rem!important;box-shadow:0 12px 35px #007aff35}
+.ios-focus-art{width:112px;height:126px;top:26px;transition:opacity .2s,transform .2s}
+.ios-focus-art svg{width:64px;height:64px}
+[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-hero-create-marker):hover .ios-focus-art{opacity:.16;transform:rotate(5deg) scale(.96)}
+.ios-focus{padding-right:132px}
+.ios-focus .ios-eyebrow{font-size:1rem}
+
+/* Weekly goal and calendar. */
+[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-goal-card-marker){background:var(--surface);border:0;border-radius:24px;min-height:286px;padding:1.35rem 1.5rem}
+[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-goal-card-marker) [data-testid="stVerticalBlock"]{gap:.25rem}
+.ios-goal-title{text-align:center;font-size:1.3rem;font-weight:750;letter-spacing:-.03em;padding:.45rem 0}
+[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-goal-card-marker) [data-testid="stButton"] button{opacity:.48;background:transparent;font-size:1.35rem!important;padding:0}
+[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-goal-card-marker) [data-testid="stButton"] button:hover{opacity:1}
+.ios-goal-ring-wrap{display:grid;place-items:center;padding:1rem 0 .35rem}
+.ios-goal-ring-wrap .ios-ring{width:146px;height:146px}
+.ios-goal-ring-wrap .ios-ring strong span{font-size:1.05rem;color:var(--muted);letter-spacing:0}
+.calendar-heading{text-align:center;font-size:1.65rem;font-weight:760;padding:.6rem 0}
+.goal-calendar{background:var(--surface);border-radius:22px;padding:1rem;margin:1rem 0 2rem;overflow-x:auto}
+.goal-calendar table{width:100%;border-collapse:separate;border-spacing:.35rem;table-layout:fixed}
+.goal-calendar th{height:36px;color:var(--muted);font-size:.8rem;font-weight:600}
+.goal-calendar td{height:72px;text-align:center;border-radius:14px;background:var(--surface-soft);position:relative}
+.goal-calendar td span{position:relative;z-index:2;font-size:.95rem}
+.goal-calendar td.has-reel::after{content:"";position:absolute;width:34px;height:34px;border-radius:50%;background:var(--accent);opacity:.22;left:50%;top:50%;transform:translate(-50%,-50%)}
+.goal-calendar td.is-today{outline:2px solid var(--accent);outline-offset:-2px}
+
+/* Clickable production stages and recent projects. */
+[data-testid="stVerticalBlock"]:has(> .element-container .ios-pipeline-marker){background:var(--surface);border-radius:20px;padding:.8rem}
+[data-testid="stVerticalBlock"]:has(> .element-container .ios-pipeline-marker) [data-testid="stButton"] button{min-height:92px;background:transparent;color:var(--text);border-radius:14px}
+[data-testid="stVerticalBlock"]:has(> .element-container .ios-pipeline-marker) [data-testid="stButton"] button p{white-space:pre-line;font-size:.85rem;line-height:2;font-weight:650}
+[data-testid="stVerticalBlock"]:has(> .element-container .ios-pipeline-marker) [data-testid="stButton"] button:hover{background:var(--blue-soft);border-color:transparent;transform:translateY(-2px)}
+[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-project-click-marker){padding:0!important;transition:opacity .18s,transform .18s}
+[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-project-click-marker):hover{opacity:.68;transform:translateY(-1px)}
+[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-project-click-marker) [data-testid="stButton"] button{min-height:82px;background:transparent;border:0;color:var(--text);justify-content:flex-start;text-align:left;padding:1rem 1.25rem}
+[data-testid="stVerticalBlockBorderWrapper"]:has(.ios-project-click-marker) [data-testid="stButton"] button p{white-space:pre-line;font-size:1rem;line-height:1.65;font-weight:650;text-align:left}
+
+/* Script and storyboard readability. */
+.timeline-card-grid{grid-template-columns:1fr!important;gap:.8rem!important}
+.timeline-card{min-height:0!important;padding:1rem 1.1rem!important}
+.script-line{display:grid;grid-template-columns:4rem 1fr;gap:.75rem;padding:.55rem 0;border-top:1px solid var(--border);align-items:start}
+.script-line:first-of-type{border-top:0}
+.script-line b{font-size:.82rem;color:var(--muted)}
+.script-line p{font-size:.95rem!important;font-weight:500!important;line-height:1.45!important}
+.storyboard-title{font-size:1.18rem!important;margin-bottom:.65rem}
+.story-note{margin:.1rem 0!important;line-height:1.3!important}
+[role="radiogroup"][aria-label="스튜디오 단계"],[role="radiogroup"][aria-label="대본 유형"]{background:var(--surface-soft);padding:4px;border-radius:14px;gap:4px}
+[role="radiogroup"][aria-label="스튜디오 단계"] label,[role="radiogroup"][aria-label="대본 유형"] label{border-radius:10px;padding:.55rem 1rem;justify-content:center}
+[role="radiogroup"][aria-label="스튜디오 단계"] label:has(input:checked),[role="radiogroup"][aria-label="대본 유형"] label:has(input:checked){background:var(--surface);box-shadow:0 2px 8px #00000012}
+.audio-option h3{margin:0 0 .8rem;padding:0!important}
+.audio-option p{display:grid;grid-template-columns:6rem 1fr;gap:.8rem;margin:0;padding:.55rem 0;border-top:1px solid var(--border)}
+.audio-option b{color:var(--muted);font-size:.84rem}
+.audio-option span{font-size:.94rem}
+
+@media(max-width:760px){
+ .rl-head h1{font-size:2.15rem!important}
+ [data-testid="stVerticalBlockBorderWrapper"]:has(.ios-hero-create-marker) [data-testid="stButton"]{opacity:1;right:1rem;top:5.8rem;width:82px}
+ [data-testid="stVerticalBlockBorderWrapper"]:has(.ios-hero-create-marker) [data-testid="stButton"] button{height:96px}
+ .ios-focus-art{width:82px;height:96px;opacity:.18}.ios-focus{padding-right:86px}
+ [data-testid="stVerticalBlock"]:has(> .element-container .ios-pipeline-marker) [data-testid="stHorizontalBlock"]{display:grid;grid-template-columns:repeat(2,1fr)}
+ [data-testid="stVerticalBlock"]:has(> .element-container .ios-pipeline-marker) [data-testid="column"]{width:auto!important}
+ .goal-calendar td{height:52px}.script-line{grid-template-columns:3.3rem 1fr}
+}

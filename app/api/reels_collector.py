@@ -5,6 +5,7 @@ import math
 import time
 import argparse
 from pathlib import Path
+from urllib.parse import urlparse, urlunparse
 
 import json
 import re
@@ -123,6 +124,111 @@ def get_reels_data(keyword: str, max_items: int = 20) -> list[dict]:
     result = dataset_res.json()
     record_api_usage("apify", metadata={"operation": "reels_collection", "items": len(result)})
     return result
+
+def get_reel_from_url(reel_url: str) -> dict:
+    """Resolve one public Instagram Reel URL into a Radar analysis signal."""
+    value = str(reel_url or "").strip()
+    parsed = urlparse(value)
+    host = (parsed.hostname or "").lower()
+    match = re.match(r"^/(?:reel|reels|p)/([^/?#]+)", parsed.path or "")
+    if parsed.scheme not in {"http", "https"} or not (host == "instagram.com" or host.endswith(".instagram.com")) or not match:
+        raise ValueError("Instagram 릴스 링크를 입력해주세요. 예: https://www.instagram.com/reel/ABC123/")
+
+    code = match.group(1)
+    canonical_url = urlunparse(("https", "www.instagram.com", f"/reel/{code}/", "", "", ""))
+    actor_id = get_env("APIFY_INSTAGRAM_URL_ACTOR_ID", "apify/instagram-scraper")
+    actor_id_for_url = actor_id.replace("/", "~")
+    apify_token = require_env("APIFY_TOKEN", "Instagram 링크 수집")
+    headers = {"Authorization": f"Bearer {apify_token}", "Content-Type": "application/json"}
+    run_input = {
+        "directUrls": [canonical_url],
+        "resultsType": "posts",
+        "resultsLimit": 1,
+        "addParentData": False,
+    }
+
+    enforce_daily_limit("apify", max_calls=int(get_env("APIFY_DAILY_CALL_LIMIT", "50") or 50))
+    with observed_operation("apify.reel_url_collection", reel_code=code):
+        start_res = requests.post(
+            f"https://api.apify.com/v2/acts/{actor_id_for_url}/runs",
+            headers=headers,
+            json=run_input,
+            timeout=60,
+        )
+        start_res.raise_for_status()
+        run_id = start_res.json()["data"]["id"]
+
+        deadline = time.monotonic() + 180
+        while True:
+            status_res = requests.get(
+                f"https://api.apify.com/v2/actor-runs/{run_id}",
+                headers=headers,
+                timeout=30,
+            )
+            status_res.raise_for_status()
+            status_data = status_res.json()["data"]
+            status = status_data["status"]
+            if status == "SUCCEEDED":
+                dataset_id = status_data["defaultDatasetId"]
+                break
+            if status in {"FAILED", "ABORTED", "TIMED-OUT"}:
+                raise RuntimeError(f"Instagram 링크 수집에 실패했습니다: {status}")
+            if time.monotonic() >= deadline:
+                raise TimeoutError("Instagram 링크 수집 시간이 초과됐습니다.")
+            time.sleep(3)
+
+        dataset_res = requests.get(
+            f"https://api.apify.com/v2/datasets/{dataset_id}/items",
+            headers=headers,
+            params={"clean": "true"},
+            timeout=60,
+        )
+        dataset_res.raise_for_status()
+        rows = dataset_res.json()
+
+    if not rows:
+        raise RuntimeError("공개 릴스 정보를 가져오지 못했습니다. 비공개·삭제된 영상인지 확인해주세요.")
+    reel = next(
+        (
+            row for row in rows
+            if str(row.get("shortCode") or row.get("code") or "").lower() == code.lower()
+        ),
+        rows[0],
+    )
+    if reel.get("error"):
+        raise RuntimeError(str(reel.get("error")))
+
+    owner = reel.get("owner") if isinstance(reel.get("owner"), dict) else {}
+    music = reel.get("musicInfo") if isinstance(reel.get("musicInfo"), dict) else {}
+    video_url = reel.get("videoUrl") or reel.get("video_url") or reel.get("media_url") or ""
+    thumbnail_url = reel.get("displayUrl") or reel.get("thumbnailUrl") or reel.get("thumbnail_url") or ""
+    if not video_url and not thumbnail_url:
+        raise RuntimeError("이 링크에서 분석 가능한 영상 또는 썸네일을 찾지 못했습니다.")
+
+    views = next(
+        (safe_number(reel.get(key)) for key in ("videoPlayCount", "videoViewCount", "ig_play_count", "view_count") if reel.get(key) is not None),
+        0,
+    )
+    username = reel.get("ownerUsername") or reel.get("username") or owner.get("username") or "추가 링크"
+    track = music.get("song_name") or music.get("title") or get_audio_title(reel)
+    record_api_usage("apify", metadata={"operation": "reel_url_collection", "items": 1})
+    return {
+        "media_id": str(reel.get("id") or code),
+        "username": str(username),
+        "url": str(reel.get("url") or reel.get("inputUrl") or canonical_url),
+        "caption": get_caption_text(reel),
+        "track": str(track or ""),
+        "thumbnail_url": str(thumbnail_url),
+        "video_url": str(video_url),
+        "views": int(views or 0),
+        "published_at": str(reel.get("timestamp") or reel.get("taken_at_date") or ""),
+        "view_delta": 0,
+        "comparison_confidence": "direct_url",
+        "is_new_account": False,
+        "discovered_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "manual_url": True,
+    }
+
 
 def safe_get_number(item, key):
     """

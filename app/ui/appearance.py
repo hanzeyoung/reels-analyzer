@@ -5,7 +5,7 @@ from urllib.parse import quote
 
 import streamlit as st
 
-NAV_LABELS = {"Home": "홈", "Radar": "발견", "Studio": "스튜디오", "Insights": "인사이트", "Playbook": "플레이북", "Settings": "설정"}
+NAV_LABELS = {"Home": "홈", "Radar": "공통점 추출", "Studio": "스튜디오", "Insights": "인사이트", "Playbook": "플레이북", "Settings": "설정"}
 NAV_ITEMS = list(NAV_LABELS)[:5]
 STAGE_NAMES = {"idea": "아이디어", "script": "대본", "shoot": "촬영", "review": "검토", "posted": "게시 완료"}
 ICON_PATHS = {

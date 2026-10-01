@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import calendar
 import html
 import json
 import re
@@ -12,14 +13,14 @@ from pathlib import Path
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+import streamlit.components.v1 as components
 
 from app.ui.appearance import NAV_LABELS, STAGE_NAMES, icon
 
-from app.core.audio_rights import annotate_tracks, recommend_audio_options
-from app.core.content_projects import PROJECT_STAGES, create_project, list_projects, next_action, pipeline_counts, update_project
+from app.core.audio_rights import recommend_audio_options
+from app.core.content_projects import PROJECT_STAGES, create_project, list_projects, pipeline_counts, update_project
 from app.core.performance_insights import build_account_baseline, compare_snapshot_windows, load_performance_history, normalize_insights
-from app.core.signal_studies import add_signal, build_signal_synthesis, build_visual_synthesis, load_study, remove_signal, save_visual_analysis
-from app.core.storyboard import build_mobile_coach_url
+from app.core.signal_studies import add_signal, build_signal_synthesis, build_visual_synthesis, load_study, replace_signals, save_visual_analysis
 from app.api.guide_media import download_flux_guide, generate_elevenlabs_voiceover, generate_flux_guide
 
 
@@ -52,12 +53,12 @@ def _save_settings(path, values):
 
 
 def _header(title, subtitle):
-    label = NAV_LABELS.get(title, title)
-    date = datetime.now()
-    day = "월화수목금토일"[date.weekday()]
-    kicker = f"{date.month}월 {date.day}일 {day}요일" if title == "Home" else "Reel Lab · 나의 작업 공간"
-    label = "오늘의 스튜디오" if title == "Home" else label
-    st.markdown(f'<header class="rl-head"><div class="rl-kicker">{_safe(kicker)}</div><h1>{_safe(label)}</h1><p>{_safe(subtitle)}</p></header>', unsafe_allow_html=True)
+    label = "오늘의 스튜디오" if title == "Home" else NAV_LABELS.get(title, title)
+    kicker = "" if title == "Home" else '<div class="rl-kicker">Reel Lab · 나의 작업 공간</div>'
+    st.markdown(
+        f'<header class="rl-head">{kicker}<h1>{_safe(label)}</h1><p>{_safe(subtitle)}</p></header>',
+        unsafe_allow_html=True,
+    )
 
 
 def _metric(label, value, detail=""):
@@ -65,7 +66,8 @@ def _metric(label, value, detail=""):
 
 
 def _section(title, detail=""):
-    st.markdown(f'<div class="ios-section-title"><h2>{_safe(title)}</h2><span>{_safe(detail)}</span></div>', unsafe_allow_html=True)
+    detail_html = f'<span>{_safe(detail)}</span>' if detail else ""
+    st.markdown(f'<div class="ios-section-title"><h2>{_safe(title)}</h2>{detail_html}</div>', unsafe_allow_html=True)
 
 
 def _empty(title, description, symbol="Studio"):
@@ -88,6 +90,62 @@ def _new_project_form(ctx):
         _go("Studio")
 
 
+def _calendar_date(value):
+    try:
+        return datetime.fromisoformat(str(value or "").replace("Z", "+00:00")).date()
+    except ValueError:
+        return None
+
+
+def _goal_calendar(projects, goal, preferences, ctx):
+    if st.button("← 홈으로", key="close_goal_calendar"):
+        st.session_state["show_goal_calendar"] = False
+        st.rerun()
+    today = datetime.now().date()
+    month_value = st.session_state.get("goal_calendar_month", today.strftime("%Y-%m"))
+    try:
+        month_date = datetime.strptime(month_value, "%Y-%m").date().replace(day=1)
+    except ValueError:
+        month_date = today.replace(day=1)
+    previous_month = (month_date.replace(day=1) - timedelta(days=1)).replace(day=1)
+    next_month = (month_date.replace(day=28) + timedelta(days=4)).replace(day=1)
+    left, title, right = st.columns([1, 4, 1])
+    if left.button("‹", key="calendar_previous", use_container_width=True):
+        st.session_state["goal_calendar_month"] = previous_month.strftime("%Y-%m")
+        st.rerun()
+    title.markdown(f'<div class="calendar-heading">{month_date.year}년 {month_date.month}월</div>', unsafe_allow_html=True)
+    if right.button("›", key="calendar_next", use_container_width=True):
+        st.session_state["goal_calendar_month"] = next_month.strftime("%Y-%m")
+        st.rerun()
+
+    reel_days = set()
+    for project in projects:
+        for field in ("created_at", "published_at"):
+            project_date = _calendar_date(project.get(field))
+            if project_date and project_date.year == month_date.year and project_date.month == month_date.month:
+                reel_days.add(project_date.day)
+    weeks = calendar.Calendar(firstweekday=0).monthdayscalendar(month_date.year, month_date.month)
+    headers = "".join(f"<th>{day}</th>" for day in ["월", "화", "수", "목", "금", "토", "일"])
+    rows = []
+    for week in weeks:
+        cells = []
+        for day in week:
+            if not day:
+                cells.append("<td></td>")
+            else:
+                classes = " has-reel" if day in reel_days else ""
+                today_class = " is-today" if month_date.year == today.year and month_date.month == today.month and day == today.day else ""
+                cells.append(f'<td class="{classes}{today_class}"><span>{day}</span></td>')
+        rows.append("<tr>" + "".join(cells) + "</tr>")
+    st.markdown(f'<div class="goal-calendar"><table><thead><tr>{headers}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>', unsafe_allow_html=True)
+
+    st.markdown("### 이번 주 목표 바꾸기")
+    new_goal = st.number_input("이번 주 게시 목표", 1, 20, goal, label_visibility="collapsed")
+    if new_goal != goal:
+        _save_settings(ctx["workspace_settings_path"], {**preferences, "weekly_publish_goal": int(new_goal)})
+        st.rerun()
+
+
 def home(ctx):
     projects = list_projects(ctx["projects_path"])
     counts = pipeline_counts(projects)
@@ -95,58 +153,86 @@ def home(ctx):
     preferences = _load_settings(ctx["workspace_settings_path"])
     goal = min(20, max(1, int(preferences.get("weekly_publish_goal", 3))))
     week_start = datetime.now() - timedelta(days=datetime.now().weekday())
-    done = sum(1 for item in projects if item.get("stage") == "posted" and str(item.get("published_at", "")) >= week_start.isoformat()[:10])
+    done = sum(
+        1 for item in projects
+        if item.get("stage") == "posted" and str(item.get("published_at", "")) >= week_start.isoformat()[:10]
+    )
     _header("Home", "아이디어를 담고, 나만의 릴스를 완성해 보세요.")
+    if st.session_state.get("show_goal_calendar"):
+        _goal_calendar(projects, goal, preferences, ctx)
+        return
+
     focus, progress = st.columns([1.65, 1], gap="medium")
     with focus:
         with st.container(border=True):
-            eyebrow = "이어서 만들기" if active else "당신의 다음 릴스"
             title = active.get("title") if active else "작은 아이디어,\n새로운 가능성."
-            description = next_action(active) if active else "매장의 일상에서 시작해 보세요.\n기획부터 촬영, 분석까지 함께할게요."
-            title_html = _safe(title).replace("\n", "<br>")
-            description_html = _safe(description).replace("\n", "<br>")
-            st.markdown(f'<span class="ios-focus-marker"></span><div class="ios-focus"><div class="ios-eyebrow">{icon("Studio", 16)}{eyebrow}</div><h2>{title_html}</h2><p>{description_html}</p><div class="ios-focus-art">{icon("Studio", 44)}</div></div>', unsafe_allow_html=True)
-            if active:
-                if st.button("프로젝트 이어서 만들기  →", type="primary", key="continue_project"):
-                    st.session_state["active_project_id"] = active["id"]
-                    _go("Studio")
-            elif st.button("새 프로젝트 시작하기  +", type="primary", key="start_project"):
-                st.session_state["show_new_project"] = not st.session_state.get("show_new_project", False)
+            description = "새로운 아이디어를 프로젝트로 만들고 대본과 촬영 계획을 완성해 보세요."
+            st.markdown(
+                f'<span class="ios-focus-marker"></span><div class="ios-focus">'
+                f'<div class="ios-eyebrow">{icon("Studio", 18)}프로젝트 만들기</div>'
+                f'<h2>{_safe(title).replace(chr(10), "<br>")}</h2>'
+                f'<p>{_safe(description)}</p><div class="ios-focus-art">{icon("Studio", 64)}</div></div>',
+                unsafe_allow_html=True,
+            )
+            st.markdown('<span class="ios-hero-create-marker"></span>', unsafe_allow_html=True)
+            if st.button("+", key="hero_create_project", help="새 프로젝트 만들기"):
+                st.session_state["show_new_project"] = True
+                st.rerun()
     with progress:
         percent = min(100, done / goal * 100)
-        remaining = max(0, goal - done)
-        message = f"이번 주 목표까지 {remaining}개 남았어요." if remaining else "이번 주 목표를 달성했어요."
-        st.markdown(f'<style>.ios-ring{{background:conic-gradient(var(--accent) {percent:.1f}%,var(--ring-track) 0)}}</style><div class="ios-goal"><div class="ios-goal-top">이번 주 목표<small>꾸준함이 만드는 성장</small></div><div class="ios-ring"><div class="ios-ring-inner"><strong>{done}<span style="font-size:.9rem;color:var(--muted);letter-spacing:0"> / {goal}</span></strong><small>게시한 릴스</small></div></div><p>{message}</p></div>', unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown('<span class="ios-goal-card-marker"></span>', unsafe_allow_html=True)
+            goal_title, goal_arrow = st.columns([5, 1])
+            goal_title.markdown('<div class="ios-goal-title">이번 주 목표</div>', unsafe_allow_html=True)
+            if goal_arrow.button("→", key="open_goal_calendar", help="캘린더 보기"):
+                st.session_state["show_goal_calendar"] = True
+                st.rerun()
+            st.markdown(
+                f'<style>.ios-ring{{background:conic-gradient(var(--accent) {percent:.1f}%,var(--ring-track) 0)}}</style>'
+                f'<div class="ios-goal-ring-wrap"><div class="ios-ring"><div class="ios-ring-inner">'
+                f'<strong>{done}<span> / {goal}</span></strong><small>게시한 릴스</small>'
+                f'</div></div></div>',
+                unsafe_allow_html=True,
+            )
     if st.session_state.get("show_new_project"):
         _new_project_form(ctx)
-    _section("제작 현황", f"전체 {len(projects)}개 프로젝트")
-    stages = "".join(f'<div class="ios-pipeline-item"><span>{STAGE_NAMES[stage]}</span><b>{counts[stage]}</b></div>' for stage in PROJECT_STAGES)
-    st.markdown(f'<div class="ios-pipeline">{stages}</div>', unsafe_allow_html=True)
-    recent, discover = st.columns([1.65, 1], gap="medium")
-    with recent:
-        _section("최근 프로젝트", "최근 수정 순")
-        if not projects:
-            _empty("첫 이야기를 기다리고 있어요", "새 프로젝트를 만들면 이곳에 모아드릴게요.")
-        for item in projects[:4]:
-            with st.container(border=True):
-                updated = str(item.get("updated_at", ""))[:10].replace("-", ".")
-                st.markdown(f'<div class="ios-project"><div class="ios-project-icon">{icon("Studio", 22)}</div><div class="ios-project-text"><b>{_safe(item.get("title"))}</b><small>{updated}</small></div><span class="ios-stage">{_safe(STAGE_NAMES.get(item.get("stage"), "아이디어"))}</span></div>', unsafe_allow_html=True)
-                if st.button("프로젝트 열기 →", key=f"recent_{item['id']}", use_container_width=True):
-                    st.session_state["active_project_id"] = item["id"]
-                    _go("Studio")
-        if active and st.button("새 프로젝트 만들기 +", key="new_project_secondary", use_container_width=True):
-            st.session_state["show_new_project"] = True
-            st.rerun()
-    with discover:
-        _section("영감이 필요할 때")
+
+    _section("제작 현황")
+    with st.container():
+        st.markdown('<span class="ios-pipeline-marker"></span>', unsafe_allow_html=True)
+        stage_columns = st.columns(5, gap="small")
+        for column, stage in zip(stage_columns, PROJECT_STAGES):
+            with column:
+                if st.button(f"{STAGE_NAMES[stage]}\n{counts[stage]}", key=f"stage_{stage}", use_container_width=True):
+                    target = next((item for item in projects if item.get("stage") == stage), None)
+                    if target:
+                        st.session_state["active_project_id"] = target["id"]
+                        _go("Studio")
+                    else:
+                        st.session_state["home_notice"] = f"{STAGE_NAMES[stage]} 단계의 프로젝트가 없습니다."
+                        st.rerun()
+    notice = st.session_state.pop("home_notice", "")
+    if notice:
+        st.info(notice)
+
+    _section("최근 프로젝트")
+    visible_count = len(projects) if st.session_state.get("show_all_projects") else 3
+    if not projects:
+        _empty("첫 이야기를 기다리고 있어요", "새 프로젝트를 만들면 이곳에 모아드릴게요.")
+    for item in projects[:visible_count]:
         with st.container(border=True):
-            st.markdown(f'<div class="ios-project"><div class="ios-project-icon">{icon("Radar", 24)}</div><div class="ios-project-text"><b>다음 아이디어 발견하기</b><small>다른 릴스에서 우리 매장의 힌트를 찾아요.</small></div></div>', unsafe_allow_html=True)
-            if st.button("릴스 탐색하기 →", key="discover_reels", use_container_width=True):
-                _go("Radar")
-    with st.expander("주간 게시 목표 조정"):
-        new_goal = st.number_input("이번 주에 몇 개를 게시할까요?", 1, 20, goal)
-        if new_goal != goal:
-            _save_settings(ctx["workspace_settings_path"], {**preferences, "weekly_publish_goal": new_goal})
+            updated = str(item.get("updated_at", ""))[:10].replace("-", ".")
+            st.markdown('<span class="ios-project-click-marker"></span>', unsafe_allow_html=True)
+            if st.button(f"{item.get('title') or '제목 없는 프로젝트'}\n{updated}", key=f"recent_{item['id']}", use_container_width=True):
+                st.session_state["active_project_id"] = item["id"]
+                _go("Studio")
+    if len(projects) > 3 and not st.session_state.get("show_all_projects"):
+        if st.button("전체보기", key="show_all_projects_button", use_container_width=True):
+            st.session_state["show_all_projects"] = True
+            st.rerun()
+    elif len(projects) > 3 and st.session_state.get("show_all_projects"):
+        if st.button("접기", key="hide_all_projects_button", use_container_width=True):
+            st.session_state["show_all_projects"] = False
             st.rerun()
 
 
@@ -225,100 +311,92 @@ def _build_full_variants(project: dict, synthesis: dict | None = None) -> dict[s
     }
 
 
+def _create_study_project(items, query, synthesis, visual, visual_analyses, ctx):
+    """Turn the current Radar study into the active Studio project."""
+    patterns = synthesis.get("common_patterns") or []
+    focus = (
+        " · ".join(item["label"] for item in patterns[:2])
+        or ", ".join(synthesis["repeated_terms"][:3])
+        or query
+        or "대표 장면"
+    )
+    project = create_project(
+        f"{query} pattern study",
+        ctx["projects_path"],
+        business_type=ctx["business_type"],
+        concept=f"{query}에서 반복된 장면: {focus}",
+        source={
+            "type": "signal_study",
+            "query": query,
+            "signals": items,
+            "synthesis": synthesis,
+            "visual_synthesis": visual,
+            "visual_analyses": visual_analyses,
+        },
+    )
+    variants = _build_full_variants({**project, "hook": synthesis["recommended_hook"]}, synthesis)
+    project = update_project(
+        project["id"],
+        {
+            "hook": synthesis["recommended_hook"],
+            "script": variants["sales"],
+            "script_variants": variants,
+            "shot_list": synthesis["recommended_structure"],
+            "stage": "script",
+        },
+        ctx["projects_path"],
+    )
+    st.session_state["active_project_id"] = project["id"]
+    st.session_state["studio_notice"] = f"릴스 {len(visual_analyses)}개의 공통 시각 패턴을 반영한 프로젝트를 만들었습니다."
+    _go("Studio")
+
+
 def _render_study_basket(study, query, ctx):
     items = study.get("items") or []
-    with st.expander(f"분석에 담은 릴스 · {len(items)}개", expanded=bool(items)):
-        if not items:
-            st.caption("릴스 2~5개를 담으면 공통 패턴을 근거와 함께 합성합니다.")
-            return
-        for index, item in enumerate(items):
-            row, remove = st.columns([5, 1])
-            row.caption(f"@{item.get('username', 'unknown')} · {int(item.get('views') or 0):,} views · {str(item.get('caption') or 'No caption')[:56]}")
-            if remove.button("삭제", key=f"study_remove_{index}"):
-                remove_signal(_study_identity(item), ctx["study_path"])
-                st.rerun()
-        if len(items) < 2:
-            st.info("최소 두 릴스를 선택하면 하나의 프로젝트용 공통 패턴을 만들 수 있습니다.")
-            return
-        synthesis = build_signal_synthesis(items, query=query)
-        visual_analyses = study.get("visual_analyses") or {}
-        visual = build_visual_synthesis(visual_analyses, items)
-        thumbnail_items = [item for item in items if item.get("thumbnail_url")]
-        if len(thumbnail_items) >= 2:
-            if st.button("공통 시각 패턴 분석", use_container_width=True, disabled=not ctx["can_analyze_visual"]):
-                completed, failures = dict(visual_analyses), []
-                with st.spinner("선택한 릴스의 구도·자막·컷 신호를 분석하는 중입니다..."):
-                    for selected in thumbnail_items[:5]:
-                        try:
-                            completed[_study_identity(selected)] = ctx["analyze_thumbnail"](selected["thumbnail_url"], caption=selected.get("caption", ""))
-                        except Exception as exc:
-                            failures.append(f"@{selected.get('username', 'unknown')}: {exc}")
-                save_visual_analysis(completed, ctx["study_path"])
-                if failures:
-                    st.warning("일부 릴스의 시각 분석을 완료하지 못했습니다. " + " / ".join(failures[:2]))
-                st.rerun()
-        elif not thumbnail_items:
-            st.caption("현재 수집 결과에 썸네일 URL이 없어 시각 공통 분석을 실행할 수 없습니다. 새로 수집한 신호에서 제공됩니다.")
-        if visual["analyzed_count"]:
-            st.caption(f"시각 근거 {visual['analyzed_count']}개 · 구도 {visual['top_camera'] or '-'} · 자막 {visual['top_subtitle_position'] or '-'} · 컷 {visual['top_cut_speed'] or '-'} · BGM {visual['top_bgm_mood'] or '-'} · 신뢰도 {visual['confidence']}")
-        pattern_labels = [f"{item['label']} ({item['reel_count']}/{synthesis['sample_count']})" for item in synthesis.get("common_patterns") or []]
-        st.markdown(
-            f'<div class="rl-action"><div class="rl-kicker">Pattern brief · {synthesis["sample_count"]} reels</div>'
-            f'<h3>{_safe(" · ".join(pattern_labels[:3]) or "공통 패턴을 확정할 근거가 부족합니다.")}</h3>'
-            f'<div>중앙 조회 {int(synthesis["median_views"]):,} · 신뢰도 {_safe(synthesis["confidence"])} · '
-            f'서로 다른 릴스에서 반복된 단어 {_safe(", ".join(synthesis["repeated_terms"][:3]) or "없음")}</div></div>',
-            unsafe_allow_html=True,
+    analyzable_items = [item for item in items if item.get("thumbnail_url") or item.get("video_url")]
+    slot = st.empty()
+    with slot.container(border=True):
+        st.markdown(f"### 전체 분석 대상 · {len(items)}개")
+        st.caption("검색 결과와 직접 추가한 링크를 모두 공통 시각 패턴 분석에 사용합니다.")
+        ready = len(items) >= 2 and len(analyzable_items) >= 2
+        analyze = st.button(
+            "전체 릴스 공통 시각 패턴 분석",
+            type="primary",
+            use_container_width=True,
+            disabled=not ctx["can_analyze_visual"] or not ready,
         )
-        for pattern in (synthesis.get("common_patterns") or [])[:3]:
-            with st.expander(f"근거 보기 · {pattern['label']} · {pattern['reel_count']}/{synthesis['sample_count']}개 릴스"):
-                st.caption(pattern["why_it_matters"])
-                for evidence in pattern.get("evidence") or []:
-                    matched = ", ".join(evidence.get("matches") or [])
-                    st.markdown(f"**@{_safe(evidence.get('username') or 'unknown')}** · {_safe(matched)}")
-                    st.caption(evidence.get("excerpt") or "본문 근거 없음")
-        st.caption(" · ".join(synthesis["recommended_structure"]))
-        if st.button("모은 릴스로 프로젝트 만들기", type="primary", use_container_width=True):
-            # A project must contain visual evidence when thumbnails and an AI
-            # connection are available; users should not have to discover and
-            # press a separate prerequisite button first.
-            completed = dict(visual_analyses)
-            missing = [row for row in thumbnail_items[:5] if _study_identity(row) not in completed]
-            if missing and ctx["can_analyze_visual"]:
-                with st.spinner("프로젝트에 사용할 실제 구도·자막 위치를 분석하는 중입니다..."):
-                    for selected in missing:
-                        try:
-                            completed[_study_identity(selected)] = ctx["analyze_thumbnail"](selected["thumbnail_url"], caption=selected.get("caption", ""))
-                        except Exception:
-                            # Caption evidence remains usable. The project marks
-                            # visual confidence separately instead of inventing it.
-                            pass
-                save_visual_analysis(completed, ctx["study_path"])
-                visual = build_visual_synthesis(completed, items)
-            video_items = [row for row in items[:5] if row.get("video_url")]
-            if video_items and ctx["can_analyze_visual"] and ctx.get("analyze_sequence_url"):
-                with st.spinner("영상 길이를 정규화해 5개 시간 구간의 공통 구도를 분석하는 중입니다..."):
-                    for selected in video_items:
-                        identity = _study_identity(selected)
-                        try:
-                            sequence = ctx["analyze_sequence_url"](selected["video_url"], caption=selected.get("caption", ""))
-                            completed[identity] = {**completed.get(identity, {}), **sequence}
-                        except Exception:
-                            pass
-                visual = build_visual_synthesis(completed, items)
-            patterns = synthesis.get("common_patterns") or []
-            focus = " · ".join(item["label"] for item in patterns[:2]) or ", ".join(synthesis["repeated_terms"][:3]) or query or "대표 장면"
-            project = create_project(
-                f"{query} pattern study",
-                ctx["projects_path"],
-                business_type=ctx["business_type"],
-                concept=f"{query}에서 반복된 장면: {focus}",
-                source={"type": "signal_study", "query": query, "signals": items, "synthesis": synthesis, "visual_synthesis": visual},
-            )
-            project["hook"] = synthesis["recommended_hook"]
-            variants = _build_full_variants(project, synthesis)
-            project = update_project(project["id"], {"hook": synthesis["recommended_hook"], "script": variants["sales"], "script_variants": variants, "shot_list": synthesis["recommended_structure"], "stage": "script"}, ctx["projects_path"])
-            st.session_state["active_project_id"] = project["id"]
-            _go("Studio")
+        if len(items) < 2:
+            st.info("공통 패턴을 만들려면 분석 가능한 릴스가 두 개 이상 필요합니다.")
+        elif len(analyzable_items) < 2:
+            st.warning("영상 또는 썸네일을 가져온 릴스가 두 개 이상 필요합니다.")
+    if not analyze:
+        return
+
+    slot.empty()
+    synthesis = build_signal_synthesis(items, query=query)
+    completed, failures = {}, []
+    with st.spinner(f"릴스 {len(analyzable_items)}개의 구도·자막·컷 신호를 분석하는 중입니다..."):
+        for selected in analyzable_items:
+            identity = _study_identity(selected)
+            try:
+                if selected.get("thumbnail_url"):
+                    completed[identity] = ctx["analyze_thumbnail"](
+                        selected["thumbnail_url"], caption=selected.get("caption", "")
+                    )
+                elif ctx.get("analyze_sequence_url"):
+                    completed[identity] = ctx["analyze_sequence_url"](
+                        selected["video_url"], caption=selected.get("caption", "")
+                    )
+            except Exception as exc:
+                failures.append(f"@{selected.get('username', 'unknown')}: {exc}")
+    save_visual_analysis(completed, ctx["study_path"])
+    if not completed:
+        st.error("릴스 시각 분석을 완료하지 못했습니다. 잠시 후 다시 시도해주세요.")
+        if failures:
+            st.caption(" / ".join(failures[:2]))
+        return
+    visual = build_visual_synthesis(completed, items)
+    _create_study_project(items, query, synthesis, visual, completed, ctx)
 
 
 def radar(ctx):
@@ -337,11 +415,14 @@ def radar(ctx):
                     raise RuntimeError("관련 릴스를 찾지 못했습니다. 지역명과 업종을 함께 입력해보세요. 예: 광주 맛집")
                 before = ctx["load_previous"](clean_query)
                 snapshot = ctx["build_snapshot"](reels, clean_query)
-                st.session_state["market_changes"] = ctx["compare_snapshots"](before, snapshot)
+                changes = ctx["compare_snapshots"](before, snapshot)
+                st.session_state["market_changes"] = changes
                 st.session_state["market_changes_query"] = clean_query
                 ctx["save_snapshot"](snapshot)
                 st.session_state["market_snapshot"] = snapshot
-                st.session_state["radar_notice"] = f"관련 릴스 {len(reels)}개를 찾았습니다."
+                signals = _radar_reels(snapshot, changes)
+                replace_signals(signals, ctx["study_path"], query=clean_query)
+                st.session_state["radar_notice"] = f"관련 릴스 {len(signals)}개 전체를 분석 대상으로 추가했습니다."
             st.rerun()
         except Exception as exc:
             st.error(f"릴스 검색에 실패했습니다: {exc}")
@@ -365,29 +446,34 @@ def radar(ctx):
         st.warning("저장된 검색 결과가 없습니다. 지역명과 업종을 함께 입력해 다시 검색해주세요.")
         return
     study = load_study(ctx["study_path"])
+    if study.get("query") != snapshot.get("query"):
+        study = replace_signals(signals, ctx["study_path"], query=snapshot.get("query", query))
+
     _render_study_basket(study, query, ctx)
-    rising = sum(bool(item["view_delta"]) for item in signals)
-    for col, label, value, detail in zip(st.columns(4), ["상승 중인 릴스", "새로운 계정", "반복되는 훅", "콘텐츠 형식"], [rising, sum(bool(item.get("is_new_account")) for item in signals), sum(bool(item.get("caption")) for item in signals), len(snapshot.get("top_hashtags", []))], ["vs prior capture", "this capture", "caption evidence", "repeat signals"]):
-        with col: _metric(label, value, detail)
-    for index, signal in enumerate(signals[:20]):
-        delta = signal["view_delta"]
-        views = signal["views"]
-        baseline = max(views - delta, 1)
-        multiple = f"{views / baseline:.1f}x" if delta else "new"
-        kind = "New account" if signal.get("is_new_account") else ("Rising reel" if delta else "Reference reel")
-        url = signal.get("url") or ""
-        caption = str(signal.get("caption") or "")
-        st.markdown(f'<div class="rl-signal"><div class="rl-kicker">{_safe(kind)}</div><h3>@{_safe(signal.get("username"))}</h3><p>{_safe(caption[:150] or "캡션 근거 없음")}</p><small>Views {views:,} · +{delta:,} · {multiple} · confidence {_safe(signal.get("comparison_confidence") or "low")} · {_safe(signal.get("published_at") or snapshot.get("captured_at"))}</small></div>', unsafe_allow_html=True)
-        a, b, c = st.columns(3)
-        if url: a.link_button("원본 보기", url, use_container_width=True)
-        selected = _study_identity(signal) in {_study_identity(item) for item in study.get("items", [])}
-        if b.button("추가됨" if selected else "분석에 담기", key=f"study_add_{index}", use_container_width=True, disabled=selected):
-            add_signal(signal, ctx["study_path"])
-            st.rerun()
-        if c.button("프로젝트로 만들기", key=f"signal_{index}", use_container_width=True):
-            item = create_project(f"@{signal.get('username', 'signal')} structure study", ctx["projects_path"], business_type=ctx["business_type"], concept="한 개의 경쟁 릴스 구조를 내 매장 장면으로 각색", source={"type":"competitor_signal", "url":url, "username":signal.get("username", ""), "query":query, "views":views, "view_delta":delta, "discovered_at":signal.get("discovered_at"), "comparison_confidence":signal.get("comparison_confidence", "low")})
-            st.session_state["active_project_id"] = item["id"]
-            _go("Studio")
+
+    with st.form("radar_add_reel_url"):
+        st.markdown("### 추가로 분석할 릴스")
+        reel_url = st.text_input(
+            "Instagram 릴스 링크",
+            placeholder="https://www.instagram.com/reel/ABC123/",
+        )
+        add_url = st.form_submit_button(
+            "링크 추가",
+            use_container_width=True,
+            disabled=not ctx["can_collect"],
+        )
+    if add_url:
+        if not reel_url.strip():
+            st.warning("추가할 Instagram 릴스 링크를 입력해주세요.")
+        else:
+            try:
+                with st.spinner("링크에서 영상 정보를 가져오는 중입니다..."):
+                    signal = ctx["collect_url"](reel_url.strip())
+                    updated = add_signal(signal, ctx["study_path"])
+                st.session_state["radar_notice"] = f"추가 링크를 포함해 릴스 {len(updated.get('items') or [])}개를 분석합니다."
+                st.rerun()
+            except Exception as exc:
+                st.error(f"릴스 링크를 추가하지 못했습니다: {exc}")
 
 
 def _stats(text, project):
@@ -398,18 +484,44 @@ def _stats(text, project):
     return f"{seconds}s · {cuts} cuts · {difficulty} · store fit {fit}"
 
 
+def _clean_shot_instruction(value: str) -> str:
+    text = re.sub(r"^\s*\d+(?:\.\d+)?\s*[-~–]\s*\d+(?:\.\d+)?초\s*[:|·]?\s*", "", str(value or ""))
+    text = re.split(r"\s*[·|]\s*자막\s*[:‘]", text, maxsplit=1)[0]
+    return re.sub(r"\s+", " ", text).strip(" ·|-")
+
+
 def _script_segments(text: str) -> list[dict]:
     segments = []
-    for index, raw_line in enumerate(str(text or "").splitlines()):
+    for raw_line in str(text or "").splitlines():
         line = raw_line.strip()
-        if not line:
+        if not line or line.startswith(("공통 패턴 근거:", "CTA 방향:")):
             continue
-        match = re.match(r"^((?:\d+(?:\.\d+)?\s*[-~–]\s*\d+(?:\.\d+)?초)|(?:마지막\s*\d*(?:\.\d+)?초))\s*[|·:]?\s*(.*)$", line)
-        if match:
-            time_label, content = match.group(1), match.group(2)
-        else:
-            time_label, content = f"장면 {index + 1}", line
-        segments.append({"time": time_label.replace("-", "–").replace("~", "–"), "content": content})
+        match = re.match(
+            r"^((?:\d+(?:\.\d+)?\s*[-~–]\s*\d+(?:\.\d+)?초)|(?:마지막\s*\d*(?:\.\d+)?초))\s*[|·:]?\s*(.*)$",
+            line,
+        )
+        time_label = match.group(1) if match else f"장면 {len(segments) + 1}"
+        content = match.group(2) if match else line
+        parts = [part.strip() for part in content.split("|") if part.strip()]
+        description = parts[0] if parts else content
+        subtitle = ""
+        shot = ""
+        for part in parts[1:]:
+            if part.startswith("자막:"):
+                subtitle = part.split(":", 1)[1].strip()
+            elif not shot:
+                shot = part
+        if not subtitle and "CTA:" in description:
+            subtitle = description.split("CTA:", 1)[1].strip()
+            description = "마지막 행동 유도"
+        segments.append({
+            "time": time_label.replace("-", "–").replace("~", "–"),
+            "description": description,
+            "subtitle": subtitle or "자막 없음",
+            "shot": shot or _clean_shot_instruction(description),
+        })
+        if len(segments) == 5:
+            break
     return segments
 
 
@@ -417,10 +529,32 @@ def _segment_cards(segments: list[dict], empty_message: str) -> str:
     if not segments:
         return f'<div class="timeline-empty">{_safe(empty_message)}</div>'
     cards = "".join(
-        f'<article class="timeline-card"><span>{_safe(segment["time"])}</span><p>{_safe(segment["content"])}</p></article>'
+        f'<article class="timeline-card"><span>{_safe(segment["time"])}</span>'
+        f'<div class="script-line"><b>내용</b><p>{_safe(segment["description"])}</p></div>'
+        f'<div class="script-line"><b>자막</b><p>{_safe(segment["subtitle"])}</p></div>'
+        f'<div class="script-line"><b>샷</b><p>{_safe(segment["shot"])}</p></div></article>'
         for segment in segments
     )
     return f'<div class="timeline-card-grid">{cards}</div>'
+
+
+def _shot_cards(shots: list[str], empty_message: str) -> str:
+    if not shots:
+        return f'<div class="timeline-empty">{_safe(empty_message)}</div>'
+    ranges = ["0–2초", "2–5초", "5–9초", "9–13초", "13–15초"]
+    cards = "".join(
+        f'<article class="timeline-card shot-only-card"><span>{ranges[index]}</span><p>{_safe(shot)}</p></article>'
+        for index, shot in enumerate(shots[:5])
+    )
+    return f'<div class="timeline-card-grid">{cards}</div>'
+
+
+def _storyboard_card(ctx, step, hide_shooting=False):
+    card = ctx["render_storyboard_card"](step)
+    card = re.sub(r'<p class="story-note"><strong>분석 반영:</strong>.*?</p>', "", card, flags=re.DOTALL)
+    if hide_shooting:
+        card = re.sub(r'<p class="story-note"><strong>촬영:</strong>.*?</p>', "", card, flags=re.DOTALL)
+    return card
 
 
 def _project_tab(item, ctx):
@@ -429,142 +563,108 @@ def _project_tab(item, ctx):
         concept = st.text_area("아이디어", item.get("concept", ""), height=80)
         save = st.form_submit_button("기획 저장", type="primary", use_container_width=True)
     if save:
-        update_project(item["id"], {"title":title, "concept":concept}, ctx["projects_path"]); st.rerun()
-    st.subheader("첫 장면의 훅")
+        update_project(item["id"], {"title": title, "concept": concept}, ctx["projects_path"])
+        st.rerun()
+
+    st.subheader("첫 문장 추천")
     with st.form(f"hook_{item['id']}"):
         hook = st.text_area("첫 문장", item.get("hook", ""), height=70, placeholder="첫 2초에 손님이 멈출 이유")
-        hook_save = st.form_submit_button("훅 저장", use_container_width=True)
+        hook_save = st.form_submit_button("첫 문장 저장", use_container_width=True)
     if hook_save:
-        update_project(item["id"], {"hook":hook, "stage":"script"}, ctx["projects_path"]); st.rerun()
-    st.subheader("대본 버전")
+        update_project(item["id"], {"hook": hook, "stage": "script"}, ctx["projects_path"])
+        st.rerun()
+
+    st.subheader("추천 대본")
     variants = item.get("script_variants") or {}
     variants_are_short = not variants or any(len(str(variants.get(key) or "")) < 180 for key in ("sales", "story", "curiosity"))
     if variants_are_short:
-        st.caption("현재 초안은 방향만 있습니다. 촬영 순서와 CTA까지 포함한 대본으로 확장할 수 있습니다.")
         if st.button("전체 대본 만들기", use_container_width=True):
             full_variants = _build_full_variants(item)
             update_project(item["id"], {"script_variants": full_variants, "script": full_variants["sales"], "stage": "script"}, ctx["projects_path"])
             st.rerun()
-    for tab, key, name in zip(st.tabs(["상품 소개", "스토리", "호기심"]), ["sales", "story", "curiosity"], ["상품 소개", "스토리", "호기심"]):
-        with tab:
-            current_text = variants.get(key) or (item.get("script", "") if key == "sales" else "")
-            st.markdown(_segment_cards(_script_segments(current_text), "대본을 만들면 초 구간별 카드가 여기에 표시됩니다."), unsafe_allow_html=True)
-            st.caption(_stats(current_text, item))
-            with st.expander(f"{name} 대본 문구 수정"):
-                text = st.text_area("초 구간마다 한 줄씩 입력", current_text, key=f"variant_{item['id']}_{key}", height=220, label_visibility="collapsed")
-                if st.button("수정한 대본 저장", key=f"variant_save_{item['id']}_{key}", use_container_width=True):
-                    values = {**variants, key:text}
-                    update_project(item["id"], {"script_variants":values, "script":values.get("sales", ""), "stage":"script"}, ctx["projects_path"]); st.rerun()
+    variant_names = {"sales": "상품 소개", "story": "스토리", "curiosity": "호기심"}
+    variant_key = st.radio(
+        "대본 유형", list(variant_names), format_func=variant_names.get, horizontal=True,
+        key=f"script_choice_{item['id']}", label_visibility="collapsed",
+    )
+    current_text = variants.get(variant_key) or (item.get("script", "") if variant_key == "sales" else "")
+    segments = _script_segments(current_text)
+    st.markdown(_segment_cards(segments, "대본을 만들면 초 구간별 카드가 여기에 표시됩니다."), unsafe_allow_html=True)
+    with st.expander(f"{variant_names[variant_key]} 대본 문구 수정"):
+        edited_text = st.text_area("초 구간마다 한 줄씩 입력", current_text, key=f"variant_{item['id']}_{variant_key}", height=220, label_visibility="collapsed")
+        if st.button("수정한 대본 저장", key=f"variant_save_{item['id']}_{variant_key}", use_container_width=True):
+            values = {**variants, variant_key: edited_text}
+            update_project(item["id"], {"script_variants": values, "script": values.get("sales", ""), "stage": "script"}, ctx["projects_path"])
+            st.rerun()
+
     st.subheader("촬영 목록")
-    shot_ranges = ["0–2초", "2–5초", "5–9초", "9–13초", "13–15초"]
-    shot_segments = [
-        {"time": shot_ranges[min(index, len(shot_ranges) - 1)], "content": shot}
-        for index, shot in enumerate(item.get("shot_list") or [])
-    ]
-    st.markdown(_segment_cards(shot_segments, "촬영 목록을 만들면 장면별 카드가 여기에 표시됩니다."), unsafe_allow_html=True)
+    cleaned_shots = [_clean_shot_instruction(shot) for shot in (item.get("shot_list") or [])]
+    cleaned_shots = [shot for shot in cleaned_shots if shot][:5]
+    st.markdown(
+        _shot_cards(cleaned_shots, "대본을 선택하면 촬영 장면이 여기에 표시됩니다."),
+        unsafe_allow_html=True,
+    )
     with st.expander("촬영 목록 수정"):
         with st.form(f"shots_{item['id']}"):
-            shots = st.text_area("한 줄에 한 장면씩 적어주세요", "\n".join(item.get("shot_list") or []), height=150)
+            shots = st.text_area("한 줄에 한 장면씩 적어주세요", "\n".join(cleaned_shots), height=150)
             shot_save = st.form_submit_button("촬영 목록 저장", use_container_width=True)
         if shot_save:
-            update_project(item["id"], {"shot_list":[line.strip() for line in shots.splitlines() if line.strip()], "stage":"shoot"}, ctx["projects_path"]); st.rerun()
+            values = [_clean_shot_instruction(line) for line in shots.splitlines()]
+            update_project(item["id"], {"shot_list": [value for value in values if value][:5], "stage": "shoot"}, ctx["projects_path"])
+            st.rerun()
+
     source = item.get("source") or {}
     visual = source.get("visual_synthesis") or {}
-    signals_with_thumbnails = [
-        row for row in (source.get("signals") or [])[:5]
-        if row.get("thumbnail_url")
-    ]
-    needs_geometry = (
-        source.get("type") == "signal_study"
-        and len(signals_with_thumbnails) >= 2
-        and not visual.get("subject_bbox")
-    )
-    needs_sequence = (
-        source.get("type") == "signal_study"
-        and sum(bool(row.get("video_url")) for row in (source.get("signals") or [])) >= 2
-        and int(visual.get("sequence_analyzed_count") or 0) < 2
-    )
-    if (needs_geometry or needs_sequence) and ctx.get("can_analyze_visual") and not source.get("sequence_geometry_attempted_at"):
-        analyses, failures = dict(source.get("visual_analyses") or {}), []
-        with st.spinner("릴스 길이를 정규화해 구간별 물품·자막 좌표를 계산하는 중입니다..."):
-            for signal in signals_with_thumbnails:
-                try:
-                    identity = _study_identity(signal)
-                    if needs_geometry and not analyses.get(identity, {}).get("subject_bbox"):
-                        analyses[identity] = {**analyses.get(identity, {}), **ctx["analyze_thumbnail"](
-                            signal["thumbnail_url"], caption=signal.get("caption", "")
-                        )}
-                    if signal.get("video_url") and ctx.get("analyze_sequence_url"):
-                        analyses[identity] = {**analyses.get(identity, {}), **ctx["analyze_sequence_url"](
-                            signal["video_url"], caption=signal.get("caption", "")
-                        )}
-                except Exception as exc:
-                    failures.append(str(exc))
-        visual = build_visual_synthesis(analyses, source.get("signals") or [])
-        updated_source = {
-            **source,
-            "visual_synthesis": visual,
-            "visual_analyses": analyses,
-            "visual_geometry_attempted_at": datetime.now().astimezone().isoformat(timespec="seconds"),
-            "sequence_geometry_attempted_at": datetime.now().astimezone().isoformat(timespec="seconds"),
-            "visual_geometry_error": failures[0][:240] if failures else "",
-        }
-        update_project(item["id"], {"source": updated_source}, ctx["projects_path"])
-        st.rerun()
     primary_camera = visual.get("top_camera") or "클로즈업"
+    variant_shots = [segment["description"] for segment in segments][:5] or cleaned_shots
+    preview_item = {**item, "script": current_text, "shot_list": variant_shots}
+    steps = ctx["build_storyboard_steps"](ctx["business_type"], primary_camera, None, item.get("analysis") or {}, project=preview_item)[:5]
+
     st.subheader("촬영 스토리보드")
-    if source.get("type") == "signal_study":
-        st.caption(
-            f"Radar 시각 근거 {visual.get('analyzed_count', 0)}개 · 추천 구도 {primary_camera} · "
-            f"자막 {visual.get('top_subtitle_position') or '검토 필요'} · "
-            f"컷 {visual.get('top_cut_speed') or '검토 필요'}"
-        )
-        if (needs_geometry or needs_sequence) and source.get("sequence_geometry_attempted_at"):
-            st.warning("공통 물품·자막 좌표를 충분히 추출하지 못했습니다. 아래 5컷에는 장면별 안전 영역을 표시합니다.")
-    else:
-        st.caption("프로젝트의 훅과 촬영 목록을 바꾸면 피사체 위치, 자막 위치와 문구도 함께 바뀝니다.")
-    steps = ctx["build_storyboard_steps"](
-        ctx["business_type"], primary_camera, None, item.get("analysis") or {}, project=item
-    )
     for step in steps:
-        st.markdown(ctx["render_storyboard_card"](step), unsafe_allow_html=True)
+        st.markdown(_storyboard_card(ctx, step, hide_shooting=True), unsafe_allow_html=True)
+    if st.button("이 대본으로 선택하기", type="primary", use_container_width=True, key=f"choose_script_{item['id']}_{variant_key}"):
+        selected_shots = [_clean_shot_instruction(step.get("shoot", "")) for step in steps]
+        values = {**variants, variant_key: current_text}
+        update_project(
+            item["id"],
+            {"script": current_text, "script_variants": values, "shot_list": [shot for shot in selected_shots if shot][:5], "stage": "shoot"},
+            ctx["projects_path"],
+        )
+        st.session_state["studio_view"] = "촬영"
+        st.rerun()
+
     st.subheader("제작 가이드")
     guide_assets = item.get("guide_assets") or {}
-    visual = (source.get("visual_synthesis") or {}) if source.get("type") == "signal_study" else {}
     guide_prompt = (
         f"Vertical 9:16 storyboard reference for a {ctx['business_type']} Instagram reel. "
-        f"Concept: {item.get('concept') or item.get('title')}. "
-        f"Opening hook: {item.get('hook') or 'Show the result first'}. "
-        f"Camera: {visual.get('top_camera') or 'close-up'}. "
-        "Show a practical small-business filming setup, clear subject, natural light, no text overlay."
+        f"Concept: {item.get('concept') or item.get('title')}. Opening hook: {item.get('hook') or 'Show the result first'}. "
+        f"Camera: {primary_camera}. Show a practical small-business filming setup, clear subject, natural light, no text overlay."
     )
     image = guide_assets.get("image") or {}
     image_path = image.get("path", "")
     if image_path and Path(image_path).exists():
-        st.image(image_path, caption="Generated reference image. Use the composition, not another creator's exact content.")
-    if ctx.get("can_generate_image"):
-        if st.button("이미지 가이드 만들기", use_container_width=True):
-            try:
-                with st.spinner("Generating a project-specific visual reference..."):
-                    image = generate_flux_guide(guide_prompt)
-                    target = ctx["guides_dir"] / f"{item['id']}_visual.jpeg"
-                    image = {**image, "path": download_flux_guide(image["sample_url"], target)}
-                update_project(item["id"], {"guide_assets": {**guide_assets, "image": image}}, ctx["projects_path"])
-                st.rerun()
-            except Exception as exc:
-                st.error(f"Visual guide could not be generated: {exc}")
-    else:
-        st.caption("이미지 생성 서비스를 연결하면 장면별 가이드를 만들 수 있어요.")
+        st.image(image_path, caption="구도 참고 이미지")
+    if ctx.get("can_generate_image") and st.button("이미지 가이드 만들기", use_container_width=True):
+        try:
+            with st.spinner("프로젝트에 맞는 구도 이미지를 만드는 중입니다..."):
+                image = generate_flux_guide(guide_prompt)
+                target = ctx["guides_dir"] / f"{item['id']}_visual.jpeg"
+                image = {**image, "path": download_flux_guide(image["sample_url"], target)}
+            update_project(item["id"], {"guide_assets": {**guide_assets, "image": image}}, ctx["projects_path"])
+            st.rerun()
+        except Exception as exc:
+            st.error(f"이미지 가이드를 만들지 못했습니다: {exc}")
 
     voice = guide_assets.get("voiceover") or {}
     voice_path = voice.get("path", "")
     if voice_path and Path(voice_path).exists():
         st.audio(voice_path, format="audio/mpeg")
     if ctx.get("can_generate_voice"):
-        voice_text = st.text_area("내레이션 대본", voice.get("text") or item.get("script") or item.get("hook", ""), key=f"voice_{item['id']}", height=90)
+        voice_text = st.text_area("내레이션 대본", voice.get("text") or current_text, key=f"voice_{item['id']}", height=90)
         if st.button("음성 가이드 만들기", use_container_width=True):
             try:
-                with st.spinner("Generating voice guide..."):
+                with st.spinner("음성 가이드를 만드는 중입니다..."):
                     audio = generate_elevenlabs_voiceover(voice_text)
                 target = ctx["guides_dir"] / f"{item['id']}_voiceover.mp3"
                 target.parent.mkdir(parents=True, exist_ok=True)
@@ -572,85 +672,70 @@ def _project_tab(item, ctx):
                 update_project(item["id"], {"guide_assets": {**guide_assets, "voiceover": {"path": str(target), "text": voice_text, "provider": "elevenlabs"}}}, ctx["projects_path"])
                 st.rerun()
             except Exception as exc:
-                st.error(f"Voice guide could not be generated: {exc}")
-    else:
-        st.caption("음성 생성 서비스를 연결하면 내레이션을 미리 들을 수 있어요.")
+                st.error(f"음성 가이드를 만들지 못했습니다: {exc}")
 
 
 def _shoot_tab(item, ctx):
-    st.subheader("촬영")
-    for index, shot in enumerate(item.get("shot_list") or []): st.checkbox(str(shot), key=f"shot_{item['id']}_{index}")
-    st.subheader("음원 선택")
-    old = item.get("audio") or {}
+    visual = ((item.get("source") or {}).get("visual_synthesis") or {})
+    primary_camera = visual.get("top_camera") or "클로즈업"
+    steps = ctx["build_storyboard_steps"](ctx["business_type"], primary_camera, None, item.get("analysis") or {}, project=item)[:5]
+    selected_key = f"shoot_step_{item['id']}"
+    selected_index = st.session_state.get(selected_key)
+    st.subheader("촬영 스토리보드")
+    if selected_index is not None and 0 <= int(selected_index) < len(steps):
+        if st.button("←", key=f"shoot_back_{item['id']}", help="전체 시간대로 돌아가기"):
+            st.session_state[selected_key] = None
+            st.rerun()
+        st.markdown(_storyboard_card(ctx, steps[int(selected_index)]), unsafe_allow_html=True)
+    else:
+        ranges = ["0–2초", "2–5초", "5–9초", "9–13초", "13–15초"]
+        columns = st.columns(len(steps), gap="small")
+        for index, (column, step) in enumerate(zip(columns, steps)):
+            if column.button(ranges[index], key=f"shoot_time_{item['id']}_{index}", use_container_width=True):
+                st.session_state[selected_key] = index
+                st.rerun()
+
+    st.subheader("음원 추천")
     recommendations = recommend_audio_options(item)
-    st.caption("프로젝트 훅, 반복 키워드, 영상 분위기와 컷 속도를 기준으로 고른 방향입니다. Meta Sound Collection에서 검색할 키워드도 함께 제공합니다.")
-    recommendation_cards = "".join(
-        f'<article class="timeline-card"><span>{index + 1}순위 · {option["bpm"]} BPM</span>'
-        f'<p><strong>{_safe(option["name"])}</strong><br>{_safe(option["reason"])}<br>'
-        f'<small>검색어: {_safe(option["keywords"])}</small></p></article>'
-        for index, option in enumerate(recommendations)
-    )
-    st.markdown(f'<div class="timeline-card-grid">{recommendation_cards}</div>', unsafe_allow_html=True)
-    selection_mode = st.radio("선택 방법", ["추천에서 고르기", "내가 원하는 음악 입력"], horizontal=True, key=f"audio_mode_{item['id']}")
-    selected_option = None
-    if selection_mode == "추천에서 고르기":
-        selected_id = st.radio(
-            "추천 후보",
-            [option["id"] for option in recommendations],
-            format_func=lambda value: next(f"{option['name']} · {option['bpm']} BPM" for option in recommendations if option["id"] == value),
-            key=f"audio_recommendation_{item['id']}",
+    selected_id = str((item.get("audio") or {}).get("recommendation_id") or "")
+    for option in recommendations:
+        search_url = f"https://www.facebook.com/sound/collection/?q={quote(option['keywords'])}"
+        with st.container(border=True):
+            st.markdown(
+                f'<div class="audio-option"><h3>{_safe(option["name"])}</h3>'
+                f'<p><b>BPM</b><span>{_safe(option["bpm"])}</span></p>'
+                f'<p><b>추천 이유</b><span>{_safe(option["reason"])}</span></p>'
+                f'<p><b>검색어</b><span>{_safe(option["keywords"])}</span></p></div>',
+                unsafe_allow_html=True,
+            )
+            if st.button(
+                "선택됨" if selected_id == option["id"] else "이 음원 추천 선택",
+                key=f"audio_pick_{item['id']}_{option['id']}", use_container_width=True,
+                disabled=selected_id == option["id"],
+            ):
+                update_project(
+                    item["id"],
+                    {"audio": {
+                        "name": option["name"], "recommendation_id": option["id"],
+                        "recommendation_name": option["name"], "recommendation_reason": option["reason"],
+                        "search_keywords": option["keywords"], "bpm": option["bpm"], "url": search_url,
+                        "rights_source": option.get("rights_source", "meta_sound_collection"),
+                    }},
+                    ctx["projects_path"],
+                )
+                st.rerun()
+
+    selected = next((option for option in recommendations if option["id"] == selected_id), None)
+    if selected:
+        selected_url = str((item.get("audio") or {}).get("url") or f"https://www.facebook.com/sound/collection/?q={quote(selected['keywords'])}")
+        st.markdown(f'### 선택한 음원 추천 · {_safe(selected["name"])}')
+        st.link_button("음원 링크 열기", selected_url, type="primary", use_container_width=True)
+        url_json = json.dumps(selected_url)
+        components.html(
+            f"""<button id="copy-audio" onclick='navigator.clipboard.writeText({url_json}).then(() => this.textContent="복사됨")'>링크 복사</button>
+            <style>body{{margin:0}}#copy-audio{{width:100%;height:46px;border:0;border-radius:12px;background:#eef2f7;color:#0065d4;font:600 15px system-ui;cursor:pointer}}</style>""",
+            height=52,
         )
-        selected_option = next(option for option in recommendations if option["id"] == selected_id)
-    with st.form(f"audio_{item['id']}"):
-        if selected_option:
-            st.info(f"선택: {selected_option['name']} · {selected_option['use']}\n\nMeta Sound Collection 검색어: {selected_option['keywords']}")
-            name = st.text_input("실제로 찾은 곡명", old.get("name", ""), placeholder="추천 검색어로 찾은 실제 곡명을 입력하세요")
-        else:
-            name = st.text_input("사용할 음원", old.get("name", ""), placeholder="곡명 또는 Instagram 오디오 이름")
-        sources = ["", "meta_sound_collection", "owned", "commissioned", "licensed_by_business"]
-        default_source = selected_option.get("rights_source", "") if selected_option else old.get("rights_source", "")
-        source = st.selectbox("음원 이용 권한", sources, index=sources.index(default_source) if default_source in sources else 0)
-        license_name = st.text_input("라이선스 또는 이용 근거", old.get("license", ""))
-        evidence_url = st.text_input("증빙 링크", old.get("evidence_url", ""))
-        expiry = st.text_input("이용 만료일", old.get("expires_at", ""), placeholder="YYYY-MM-DD")
-        audio_save = st.form_submit_button("이 음원으로 선택", type="primary", use_container_width=True)
-    if audio_save:
-        saved_name = name.strip() or (f"추천 방향: {selected_option['name']}" if selected_option else "")
-        recommendation_data = ({
-            "recommendation_id": selected_option["id"],
-            "recommendation_name": selected_option["name"],
-            "recommendation_reason": selected_option["reason"],
-            "search_keywords": selected_option["keywords"],
-            "bpm": selected_option["bpm"],
-        } if selected_option else {})
-        update_project(item["id"], {"audio":{"name":saved_name, "rights_source":source, "license":license_name, "evidence_url":evidence_url, "expires_at":expiry, "verified_at":datetime.now().isoformat(timespec="seconds"), **recommendation_data}}, ctx["projects_path"]); st.rerun()
-    if old.get("name"):
-        rights = annotate_tracks([{"곡명":old.get("name"), **old}], registry_path=ctx["audio_registry"])[0]["rights"]
-        st.info(f"{rights.get('level', 'review').upper()} · {rights.get('status', '')} · {rights.get('detail', '')} · checked {old.get('verified_at', '-') or '-'} · expires {rights.get('expires_at', '-') or '-'}")
-    if ctx.get("mobile_coach_url"):
-        coach_server = ctx.get("mobile_coach_server") or {}
-        if not coach_server.get("running"):
-            st.error(f"촬영 코치 서버를 시작하지 못했습니다: {coach_server.get('error') or '알 수 없는 오류'}")
-            return
-        visual = ((item.get("source") or {}).get("visual_synthesis") or {})
-        primary_camera = visual.get("top_camera") or "클로즈업"
-        steps = ctx["build_storyboard_steps"](
-            ctx["business_type"], primary_camera, None, item.get("analysis") or {}, project=item
-        )
-        coach_url = build_mobile_coach_url(
-            ctx["mobile_coach_url"], item, steps, ctx.get("app_return_url", "")
-        )
-        st.subheader("프로젝트 촬영 코치")
-        st.caption("앱 실행과 함께 촬영 코치 서버도 자동으로 시작됩니다. 같은 와이파이의 휴대폰으로 QR을 열면 컷 순서, 피사체 위치와 실제 자막 문구가 표시됩니다.")
-        qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=240x240&data={quote(coach_url, safe='')}"
-        qr_col, action_col = st.columns([1, 2])
-        with qr_col:
-            st.image(qr_url, caption="휴대폰으로 스캔")
-        with action_col:
-            st.link_button("이 프로젝트로 촬영 시작", coach_url, type="primary", use_container_width=True)
-            st.code(coach_url, language=None)
-            if not coach_url.startswith("https://"):
-                st.warning("휴대폰 카메라는 대부분 HTTPS 주소에서만 열립니다. 배포 주소를 MOBILE_COACH_BASE_URL에 설정하세요.")
 
 
 def _analyze_tab(item, ctx):
@@ -707,6 +792,9 @@ def _publish_tab(item, ctx):
 def studio(ctx):
     projects = list_projects(ctx["projects_path"])
     _header("Studio", "한 프로젝트를 기획부터 게시 전 검토까지 완성")
+    notice = st.session_state.pop("studio_notice", "")
+    if notice:
+        st.success(notice)
     if not projects:
         _empty("첫 프로젝트를 시작해 보세요", "홈에서 아이디어를 적거나, 발견에서 마음에 드는 릴스를 가져오세요.")
         if st.button("홈으로 이동", type="primary", use_container_width=True): _go("Home")
@@ -716,22 +804,19 @@ def studio(ctx):
     selected = st.selectbox("프로젝트", ids, ids.index(current), format_func=lambda value:next(item["title"] for item in projects if item["id"] == value))
     st.session_state["active_project_id"] = selected
     item = _project(projects, selected)
-    source = item.get("source") or {}
-    source_label = {"signal_study": "릴스에서 발견한 아이디어", "competitor_signal": "참고 릴스", "original idea": "직접 만든 아이디어"}.get(source.get("type"), "직접 만든 아이디어")
-    st.caption(f"{STAGE_NAMES.get(item.get('stage'), '아이디어')} · {source_label}" + (f" · @{source['username']}" if source.get("username") else ""))
-    tabs = st.tabs(["프로젝트", "촬영", "분석", "게시", "라이브러리", "작업 현황"])
-    with tabs[0]: _project_tab(item, ctx)
-    with tabs[1]: _shoot_tab(item, ctx)
-    with tabs[2]: _analyze_tab(item, ctx)
-    with tabs[3]: _publish_tab(item, ctx)
-    with tabs[4]:
-        reels = ctx["load_user_reels"](ctx["business_type"])
-        if reels: st.dataframe(pd.DataFrame(reels), use_container_width=True, hide_index=True)
-        else: st.caption("저장한 영상이 아직 없어요.")
-    with tabs[5]:
-        jobs = ctx["list_jobs"]()
-        if jobs: st.dataframe(pd.DataFrame(jobs), use_container_width=True, hide_index=True)
-        else: st.caption("진행 중인 작업이 없어요.")
+    view = st.radio(
+        "스튜디오 단계",
+        ["대본", "촬영", "게시"],
+        horizontal=True,
+        key="studio_view",
+        label_visibility="collapsed",
+    )
+    if view == "대본":
+        _project_tab(item, ctx)
+    elif view == "촬영":
+        _shoot_tab(item, ctx)
+    else:
+        _publish_tab(item, ctx)
 
 
 def _measured(ctx):

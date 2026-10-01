@@ -28,7 +28,7 @@ from app.api.gemini import (
     generate_revised_production_plan,
 )
 from app.api.meta_graph import build_oauth_url, collect_my_reels, exchange_authorization_code
-from app.api.reels_collector import get_top_reels as collect_top_reels
+from app.api.reels_collector import get_reel_from_url, get_top_reels as collect_top_reels
 from app.core.audio_rights import annotate_tracks, save_rights_verification
 from app.core.auth import auth_is_configured, delete_cloud_account, sign_in, sign_up
 from app.core.config import get_env, get_env_bool, has_env
@@ -2189,6 +2189,7 @@ workspace_context = {
     "list_jobs": lambda: list_jobs(limit=100, owner_id=JOB_OWNER_ID, path=JOB_DB_PATH),
     "can_collect": has_env("APIFY_TOKEN"),
     "collect": collect_top_reels,
+    "collect_url": get_reel_from_url,
     "load_previous": lambda query: load_previous_snapshot(query, base_dir=MARKET_SNAPSHOT_DIR),
     "build_snapshot": build_market_snapshot,
     "compare_snapshots": compare_snapshots,

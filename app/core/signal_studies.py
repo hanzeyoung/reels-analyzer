@@ -60,16 +60,6 @@ PATTERN_DEFINITIONS = (
         ),
     },
     {
-        "id": "local_discovery", "label": "지역 속 발견",
-        "terms": ("골목", "역세권", "역근처", "동네", "로컬", "숨은", "신상", "오픈", "근처", "망원", "성수", "연남", "서울"),
-        "why": "찾아가는 동선과 외관을 보여주면 장소를 발견하는 재미가 생깁니다.",
-        "hook": "{focus}, 이 동네에서 발견한 이유가 있습니다",
-        "shots": (
-            ("space", "골목 또는 역에서 매장 외관까지 동선 보여주기", "전진 워킹샷", "이 길에서 이곳을 발견했습니다"),
-            ("hero", "간판 다음에 대표 메뉴를 바로 공개하기", "정면에서 클로즈업 전환", "들어오면 가장 먼저 볼 장면"),
-        ),
-    },
-    {
         "id": "scarcity", "label": "희소성과 행동 이유",
         "terms": ("웨이팅", "한정", "예약", "품절", "오픈런", "마감", "선착순", "기간", "자리"),
         "why": "언제 어떻게 방문해야 하는지 구체적으로 알려 행동을 돕습니다.",
@@ -122,7 +112,6 @@ PATTERN_DEFINITIONS = (
 )
 
 PATTERN_SPECIFICITY = {
-    "local_discovery": 1,
     "atmosphere": 2,
     "authenticity": 3,
     "value": 3,
@@ -160,6 +149,22 @@ def load_study(path: str | Path) -> dict:
     study = _read(path)
     items = study.get("items")
     return {**study, "items": items if isinstance(items, list) else []}
+
+
+
+def replace_signals(signals: list[dict], path: str | Path, query: str = "") -> dict:
+    """Replace the current study with every unique signal from one Radar search."""
+    unique = []
+    seen = set()
+    for signal in signals:
+        if not isinstance(signal, dict):
+            continue
+        identity = str(signal.get("media_id") or signal.get("url") or "")
+        if not identity or identity in seen:
+            continue
+        seen.add(identity)
+        unique.append(signal)
+    return _write({"items": unique, "visual_analyses": {}, "query": str(query or "")}, path)
 
 
 def add_signal(signal: dict, path: str | Path) -> dict:
