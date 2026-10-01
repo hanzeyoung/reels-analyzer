@@ -21,7 +21,7 @@ from app.ui.appearance import NAV_LABELS, STAGE_NAMES, icon
 
 from app.core.audio_rights import recommend_audio_options
 from app.core.oauth_state import consume_state, issue_state
-from app.core.content_projects import PROJECT_STAGES, create_project, list_projects, pipeline_counts, update_project
+from app.core.content_projects import PROJECT_STAGES, create_project, delete_project, list_projects, pipeline_counts, update_project
 from app.core.performance_insights import build_account_baseline, compare_snapshot_windows, load_performance_history, normalize_insights
 from app.core.signal_studies import add_signal, build_signal_synthesis, build_visual_synthesis, load_study, replace_signals, save_visual_analysis
 from app.api.guide_media import download_flux_guide, generate_elevenlabs_voiceover, generate_flux_guide
@@ -863,6 +863,50 @@ def _publish_tab(item, ctx):
         else: update_project(item["id"], {"instagram_media_id":media_id.strip(), "published_at":published_at.strip(), "stage":stage}, ctx["projects_path"]); st.rerun()
 
 
+def _after_project_removed(removed_id, projects):
+    # 보관/삭제된 프로젝트를 가리키던 선택값을 정리: 남은 프로젝트 중 첫 번째로 옮기고, 없으면 비운다.
+    remaining = [row["id"] for row in projects if row["id"] != removed_id]
+    if remaining:
+        st.session_state["active_project_id"] = remaining[0]
+    else:
+        st.session_state.pop("active_project_id", None)
+
+
+def _project_manager(item, projects, ctx):
+    confirm_key = f"confirm_delete_{item['id']}"
+    # 체크박스를 누르면 앱이 다시 그려지는데, 그때 접히면 삭제 버튼이 사라지므로 확인 중에는 펼쳐 둔다.
+    with st.expander("프로젝트 관리", expanded=bool(st.session_state.get(confirm_key))):
+        st.caption("보관한 프로젝트는 목록에서 숨겨지며, 아래 보관함에서 언제든 복원할 수 있습니다.")
+        if st.button("이 프로젝트 보관하기", key=f"archive_{item['id']}", use_container_width=True):
+            update_project(item["id"], {"archived": True}, ctx["projects_path"])
+            _after_project_removed(item["id"], projects)
+            st.session_state["studio_notice"] = f"'{item['title']}' 프로젝트를 보관했습니다. 보관함에서 복원할 수 있어요."
+            st.rerun()
+        st.divider()
+        confirmed = st.checkbox("삭제하면 되돌릴 수 없다는 점을 확인했습니다.", key=confirm_key)
+        if st.button("이 프로젝트 영구 삭제", key=f"delete_{item['id']}", disabled=not confirmed, use_container_width=True):
+            delete_project(item["id"], ctx["projects_path"])
+            _after_project_removed(item["id"], projects)
+            st.session_state.pop(confirm_key, None)
+            st.session_state["studio_notice"] = f"'{item['title']}' 프로젝트를 영구 삭제했습니다."
+            st.rerun()
+
+
+def _archive_box(ctx):
+    archived = [row for row in list_projects(ctx["projects_path"], include_archived=True) if row.get("archived")]
+    if not archived:
+        return
+    with st.expander(f"보관함 ({len(archived)})"):
+        for row in archived:
+            name_col, action_col = st.columns([4, 1])
+            name_col.markdown(f"**{row['title']}**")
+            if action_col.button("복원", key=f"restore_{row['id']}", use_container_width=True):
+                update_project(row["id"], {"archived": False}, ctx["projects_path"])
+                st.session_state["active_project_id"] = row["id"]
+                st.session_state["studio_notice"] = f"'{row['title']}' 프로젝트를 복원했습니다."
+                st.rerun()
+
+
 def studio(ctx):
     projects = list_projects(ctx["projects_path"])
     _header("Studio", "한 프로젝트를 기획부터 게시 전 검토까지 완성")
@@ -872,12 +916,15 @@ def studio(ctx):
     if not projects:
         _empty("첫 프로젝트를 시작해 보세요", "홈에서 아이디어를 적거나, 공통점 추출에서 마음에 드는 릴스를 가져오세요.")
         if st.button("홈으로 이동", type="primary", use_container_width=True): _go("Home")
+        _archive_box(ctx)
         return
     ids = [item["id"] for item in projects]
     current = st.session_state.get("active_project_id") if st.session_state.get("active_project_id") in ids else ids[0]
     selected = st.selectbox("프로젝트", ids, ids.index(current), format_func=lambda value:next(item["title"] for item in projects if item["id"] == value))
     st.session_state["active_project_id"] = selected
     item = _project(projects, selected)
+    _project_manager(item, projects, ctx)
+    _archive_box(ctx)
     pending_view = st.session_state.pop("studio_view_next", None)
     if pending_view:
         st.session_state["studio_view"] = pending_view

@@ -104,6 +104,15 @@ def update_project(project_id: str, updates: dict, path: str | Path) -> dict | N
     return updated
 
 
+def delete_project(project_id: str, path: str | Path) -> bool:
+    projects = _read(path)
+    remaining = [item for item in projects if item.get("id") != project_id]
+    if len(remaining) == len(projects):
+        return False
+    _write(remaining, path)
+    return True
+
+
 def pipeline_counts(projects: list[dict]) -> dict[str, int]:
     return {stage: sum(1 for item in projects if item.get("stage") == stage) for stage in PROJECT_STAGES}
 

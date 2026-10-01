@@ -47,3 +47,9 @@
 /* Primary and secondary actions span the width. */
 [data-testid="stMain"] [data-testid="stButton"] button{width:100%}
 .ios-section-title{margin:1.75rem 0 .9rem}.ios-section-title h2,h2{font-size:1.3rem!important}
+
+/* Brand name is longer than the old one: keep it whole and let the toggle group yield. */
+.ios-wordmark{font-size:.9375rem;gap:5px;letter-spacing:-.045em}
+.ios-wordmark svg{width:18px;height:18px;flex-shrink:0}
+[data-testid="stVerticalBlock"]:has(> .element-container .ios-toolbar-marker) [data-testid="column"]:first-child{flex:2.6 1 0!important;min-width:0}
+[data-testid="stVerticalBlock"]:has(> .element-container .ios-toolbar-marker) [data-testid="column"]:not(:first-child) button{padding-inline:.25rem}
