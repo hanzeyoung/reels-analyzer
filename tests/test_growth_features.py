@@ -699,3 +699,18 @@ def test_worker_processes_a_queued_file(monkeypatch, tmp_path):
     result = run_job_worker.process_job(job)
     assert result["analysis"]["overall_score"] == 77
     assert Path(result["report_path"]).exists()
+
+
+def test_reel_list_html_escapes_content_and_blocks_unsafe_links():
+    from app.ui.workspace import _reel_list_html
+
+    html_out = _reel_list_html([
+        {"username": "cafe<script>", "caption": "<img src=x onerror=alert(1)> 크림라떼", "url": "javascript:alert(1)",
+         "thumbnail_url": "https://cdn.example.com/a.jpg", "views": 12345, "published_at": "2026-09-30T10:00:00"},
+        {"username": "plain", "caption": "", "url": "https://www.instagram.com/reel/ABC/", "thumbnail_url": "", "video_url": ""},
+    ])
+    assert "<script>" not in html_out and "onerror=alert" not in html_out.replace("&lt;img src=x onerror=alert(1)&gt;", "")
+    assert "javascript:" not in html_out
+    assert "조회 12,345" in html_out and "2026-09-30" in html_out
+    assert 'href="https://www.instagram.com/reel/ABC/"' in html_out and 'rel="noopener noreferrer"' in html_out
+    assert "캡션 없음" in html_out and "영상·썸네일 없음" in html_out and "분석 가능" in html_out

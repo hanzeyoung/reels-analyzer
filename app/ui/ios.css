@@ -338,3 +338,42 @@ html,body{background:var(--bg)}
 .element-container:has(.ios-services)+.element-container{margin-top:.6rem}
 .ios-service-hint{display:block}
 .ios-service-hint code{display:inline-block;max-width:100%}
+
+/* ===== Radar: reels that will be analysed ===== */
+.ios-reel-list{margin:.4rem 0 .75rem}
+.ios-reel{display:flex;align-items:flex-start;gap:14px;padding:.8rem 0;border-top:1px solid var(--border)}
+.ios-reel:first-child{border-top:0}
+.ios-reel-thumb{position:relative;flex-shrink:0;width:56px;height:84px;border-radius:10px;overflow:hidden;background:var(--surface-soft)}
+.ios-reel-thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.ios-reel-body{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}
+.ios-reel-body b{font-size:.9375rem;font-weight:600;color:var(--text)}
+.ios-reel-body p{margin:0;font-size:.8125rem;line-height:1.5;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ios-reel-body small{font-size:.75rem;color:var(--muted)}
+.ios-reel-link{margin-top:2px;font-size:.75rem;font-weight:600;color:var(--accent-strong)!important;text-decoration:none}
+.ios-reel-link:hover{text-decoration:underline}
+.ios-pill.is-ok{background:color-mix(in srgb,var(--green) 16%,transparent);color:var(--green)}
+
+/* ===== Radar selection + multiselect ===== */
+/* placeholder: Streamlit 기본 rgba(49,51,63,.6)은 다크에서 배경과 거의 같아진다. 테마 변수로 AA(4.5:1) 이상 확보 */
+[data-baseweb="select"] [data-baseweb="input"] input::placeholder,
+[data-baseweb="select"] input::placeholder{color:color-mix(in srgb,var(--text) 72%,var(--surface-soft))!important;-webkit-text-fill-color:color-mix(in srgb,var(--text) 72%,var(--surface-soft))!important;opacity:1!important}
+/* baseweb 플레이스홀더는 입력창 래퍼 뒤에 오는 속성 없는 div (선택된 값 div는 앞에 있어 영향 없음) */
+[data-baseweb="select"] div:has(>input[role="combobox"])~div{color:color-mix(in srgb,var(--text) 72%,var(--surface-soft))!important;opacity:1!important}
+[data-baseweb="select"] input:focus-visible{outline:0!important}
+[data-baseweb="select"] input{color:var(--text)!important;-webkit-text-fill-color:var(--text);caret-color:var(--accent-strong)}
+/* 선택된 항목 칩 */
+[data-baseweb="tag"]{background:var(--blue-soft)!important;color:var(--accent-strong)!important;border:1px solid color-mix(in srgb,var(--accent-strong) 35%,transparent);border-radius:9px!important;max-width:100%;min-width:0}
+[data-baseweb="tag"] span{color:var(--accent-strong)!important;font-weight:500;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+[data-baseweb="tag"] [role="presentation"],[data-baseweb="tag"] svg{color:var(--accent-strong)!important;fill:currentColor!important;opacity:1!important}
+[data-baseweb="tag"] [role="presentation"]:hover{background:color-mix(in srgb,var(--accent-strong) 18%,transparent)!important;border-radius:50%}
+/* 드롭다운 옵션 */
+[data-baseweb="popover"],[data-baseweb="popover"]>div,[data-baseweb="popover"] [data-baseweb="menu"],[data-baseweb="popover"] ul,[data-baseweb="popover"] ul>div{background:var(--surface-solid)!important}
+[data-baseweb="popover"] [role="option"]{color:var(--text)!important;background:var(--surface-solid)!important}
+[data-baseweb="popover"] [role="option"]:hover,[data-baseweb="popover"] [role="option"][data-highlighted="true"],[data-baseweb="popover"] [role="option"]:focus-visible{background:var(--surface-soft)!important;color:var(--text)!important}
+[data-baseweb="popover"] [role="option"][aria-selected="true"]{background:var(--blue-soft)!important;color:var(--accent-strong)!important;font-weight:600}
+[data-baseweb="popover"] [role="option"] *{color:inherit!important}
+/* 포커스 링 */
+[data-baseweb="select"]:focus-within>div{box-shadow:0 0 0 2px var(--accent)!important}
+[data-baseweb="select"] [role="combobox"]:focus-visible,[data-baseweb="tag"]:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+[data-baseweb="select"] svg{color:var(--muted);fill:currentColor}
+[data-baseweb="tag"] [role="presentation"],[data-baseweb="tag"] svg{flex-shrink:0}

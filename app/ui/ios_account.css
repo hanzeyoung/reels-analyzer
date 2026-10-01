@@ -1,0 +1,21 @@
+/* ===== Login page and account card ===== */
+.ios-login-brand{text-align:center;margin:3rem 0 1.5rem}
+.ios-login-brand .ios-app-icon{margin:0 auto 1rem;width:56px;height:56px;border-radius:16px}
+.ios-login-brand h1{font-size:1.75rem!important;margin:0 0 .5rem;padding:0}
+.ios-login-brand p{margin:0 auto;max-width:22rem;font-size:.9375rem;line-height:1.6;color:var(--muted)}
+.ios-account{display:flex;align-items:center;gap:14px;padding:1rem 1.25rem;margin-bottom:.75rem;background:var(--surface);border:1px solid var(--card-border);border-radius:20px;box-shadow:var(--card-shadow);-webkit-backdrop-filter:blur(22px) saturate(160%);backdrop-filter:blur(22px) saturate(160%)}
+.ios-account b{display:block;font-size:1rem;font-weight:600;color:var(--text);word-break:break-all}
+.ios-account small{display:block;margin-top:2px;font-size:.8125rem;line-height:1.5;color:var(--muted)}
+.ios-avatar{flex-shrink:0;display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;font-size:1.0625rem}
+
+/* ===== Login popup (st.dialog) in the same glass language ===== */
+[data-testid="stModal"] [role="dialog"]{background:var(--surface-solid)!important;border:1px solid var(--card-border);border-radius:24px!important;box-shadow:0 24px 64px -16px rgba(0,0,0,.35);color:var(--text)}
+[data-testid="stModal"] [role="dialog"] h2{font-size:1.25rem!important;font-weight:700;letter-spacing:-.03em;color:var(--text);padding:0!important}
+[data-testid="stModal"] [role="dialog"] button[aria-label="Close"]{color:var(--muted)}
+[data-testid="stModal"] [data-baseweb="modal"]>div:first-child,[data-testid="stModal"]>div:first-child{background:rgba(10,12,18,.42)!important;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.ios-dialog-reason{margin:0 0 .75rem;font-size:.875rem;line-height:1.6;color:var(--muted)}
+[data-testid="stModal"] [data-testid="stForm"]{padding:1rem;border:1px solid var(--border)!important;box-shadow:none;background:var(--surface-soft)}
+[data-testid="stModal"] [role="dialog"] div{color:var(--text)}
+[data-testid="stModal"] [data-baseweb="input"]{background:var(--surface-solid)!important;border:1px solid var(--border)!important;border-radius:12px}
+[data-testid="stModal"] [data-baseweb="base-input"]{background:transparent!important;border:0!important}
+[data-testid="stModal"] [data-baseweb="input"]:focus-within{border-color:var(--accent)!important}

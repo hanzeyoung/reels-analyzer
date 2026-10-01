@@ -18,16 +18,15 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from app.ui.appearance import NAV_LABELS, STAGE_NAMES, icon
+from app.ui.gate import MEMBER_ONLY_MENUS, is_guest, member_gate_page, require_member
 
 from app.core.audio_rights import recommend_audio_options
-from app.core.oauth_state import consume_state, issue_state
 from app.core.content_projects import PROJECT_STAGES, create_project, delete_project, list_projects, pipeline_counts, update_project
 from app.core.performance_insights import build_account_baseline, compare_snapshot_windows, load_performance_history, normalize_insights
 from app.core.signal_studies import add_signal, build_signal_synthesis, build_visual_synthesis, load_study, replace_signals, save_visual_analysis
 from app.api.guide_media import download_flux_guide, generate_elevenlabs_voiceover, generate_flux_guide
 
 
-OAUTH_REISSUE_SECONDS = 12 * 60
 STAGE_HINTS = {
     "idea": "대본을 만들어 아이디어를 구체화해 보세요.",
     "script": "대본을 다듬고 촬영 계획으로 넘어가 보세요.",
@@ -91,32 +90,6 @@ def _section(title, detail=""):
 
 def _empty(title, description, symbol="Studio"):
     st.markdown(f'<div class="ios-empty"><div class="ios-empty-icon">{icon(symbol)}</div><div><h3>{_safe(title)}</h3><p>{_safe(description)}</p></div></div>', unsafe_allow_html=True)
-
-
-def _service_rows(ctx):
-    """name, what it unlocks, ready, env var NAMES to set (never values)."""
-    meta_hint = "아래 'Instagram 계정'에서 연결하세요." if ctx.get("meta_oauth_ready") else "META_APP_ID, META_APP_SECRET, META_REDIRECT_URI"
-    return [
-        ("릴스 수집", "공통점 추출에서 공개 릴스 검색·링크 추가", bool(ctx.get("can_collect")), "APIFY_TOKEN"),
-        ("AI 영상 분석", "공통 시각 패턴 분석, 영상 검토", bool(ctx.get("can_analyze_visual")), "GEMINI_API_KEY"),
-        ("이미지 가이드", "촬영 구도 참고 이미지 생성 (선택)", bool(ctx.get("can_generate_image")), "BFL_API_KEY"),
-        ("음성 가이드", "내레이션 음성 생성 (선택)", bool(ctx.get("can_generate_voice")), "ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID"),
-        ("Instagram 실측", "인사이트·플레이북의 실제 성과 데이터", bool(ctx.get("meta_token_present")), meta_hint),
-    ]
-
-
-def _services_panel(ctx):
-    rows = _service_rows(ctx)
-    ready = sum(1 for row in rows if row[2])
-    items = "".join(
-        f'<div class="ios-service {"is-ready" if ok else ""}"><div class="ios-service-main"><b>{_safe(name)}</b><span>{_safe(role)}</span>'
-        + ("" if ok else f'<small class="ios-service-hint">필요: <code>{_safe(hint)}</code></small>')
-        + f'</div><em class="ios-pill">{"연결됨" if ok else "연결 전"}</em></div>'
-        for name, role, ok, hint in rows
-    )
-    st.markdown(f'<div class="ios-services-head"><span>{ready} / {len(rows)} 연결됨</span></div><div class="ios-services">{items}</div>', unsafe_allow_html=True)
-    if ready < len(rows):
-        st.caption("환경변수는 서버의 .env 파일에 넣은 뒤 앱을 다시 시작하면 반영돼요. 키 값은 이 화면에 표시되지 않아요.")
 
 
 def _gate_note(message):
@@ -231,14 +204,14 @@ def home(ctx):
             st.markdown('<span class="ios-hero-create-marker"></span>', unsafe_allow_html=True)
             if active:
                 resume, create, _spacer = st.columns([1, 1, 1.2], gap="small")
-                if resume.button("이어서 작업하기", key="hero_resume_project", type="primary", use_container_width=True):
+                if resume.button("이어서 작업하기", key="hero_resume_project", type="primary", use_container_width=True) and require_member(ctx, "프로젝트는 내 계정에 저장돼요. 로그인하면 이어서 작업할 수 있어요."):
                     st.session_state["active_project_id"] = active["id"]
                     st.session_state["studio_view_next"] = STAGE_VIEWS.get(active.get("stage"), "대본")
                     _go("Studio")
                 new_clicked = create.button("새 프로젝트", key="hero_create_project", use_container_width=True)
             else:
                 new_clicked = st.button("새 프로젝트 만들기", key="hero_create_project", type="primary")
-            if new_clicked:
+            if new_clicked and require_member(ctx, "프로젝트는 내 계정에 저장돼요. 로그인하면 바로 만들 수 있어요."):
                 st.session_state["show_new_project"] = True
                 st.rerun()
     with progress:
@@ -415,30 +388,105 @@ def _create_study_project(items, query, synthesis, visual, visual_analyses, ctx)
     _go("Studio")
 
 
+def _http_url(value):
+    """Only plain web links may reach href/src; anything else (javascript:, data:) becomes empty."""
+    text = str(value or "").strip()
+    return text if text.lower().startswith(("https://", "http://")) else ""
+
+
+def _reel_label(item):
+    caption = re.sub(r"\s+", " ", str(item.get("caption") or "")).strip()
+    return f"@{item.get('username') or '알 수 없음'} · {(caption[:28] + '…') if len(caption) > 28 else caption or '캡션 없음'}"
+
+
+def _reel_list_html(items):
+    """Read-only list of the reels that will be analysed: who, what, how big, and a link to open it."""
+    rows = []
+    for item in items:
+        thumb, link = _http_url(item.get("thumbnail_url")), _http_url(item.get("url"))
+        usable = bool(thumb or _http_url(item.get("video_url")))
+        caption = re.sub(r"\s+", " ", str(item.get("caption") or "")).strip() or "캡션 없음"
+        views = int(item.get("views") or 0)
+        published = str(item.get("published_at") or "")[:10]
+        meta = " · ".join(part for part in (f"조회 {views:,}" if views else "", published) if part)
+        image = f'<img src="{_safe(thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer">' if thumb else ""
+        open_link = f'<a class="ios-reel-link" href="{_safe(link)}" target="_blank" rel="noopener noreferrer">Instagram에서 보기 ↗</a>' if link else ""
+        badge = '<em class="ios-pill is-ok">분석 가능</em>' if usable else '<em class="ios-pill">영상·썸네일 없음</em>'
+        rows.append(
+            f'<div class="ios-reel"><div class="ios-reel-thumb">{image}</div>'
+            f'<div class="ios-reel-body"><b>@{_safe(item.get("username") or "알 수 없음")}</b>'
+            f'<p>{_safe(caption)}</p><small>{_safe(meta)}</small>{open_link}</div>{badge}</div>'
+        )
+    return f'<div class="ios-reel-list">{"".join(rows)}</div>'
+
+
+def _select_items(items, picked_ids):
+    """Keep only the items whose identity was picked, in the original order; unknown ids are ignored."""
+    wanted = {str(value) for value in (picked_ids or [])}
+    return [item for item in items if _study_identity(item) in wanted]
+
+
+def _items_digest(items):
+    """Short hash of the current item identities; changes whenever the reel list changes."""
+    joined = "\n".join(_study_identity(item) for item in items)
+    return hashlib.md5(joined.encode("utf-8")).hexdigest()[:12]
+
+
 def _render_study_basket(study, query, ctx):
     items = study.get("items") or []
-    analyzable_items = [item for item in items if item.get("thumbnail_url") or item.get("video_url")]
+    selected_items, analyzable_items = items, []
     slot = st.empty()
     with slot.container(border=True):
-        st.markdown(f"### 전체 분석 대상 · {len(items)}개")
-        st.caption("검색 결과와 직접 추가한 링크를 모두 공통 시각 패턴 분석에 사용합니다.")
-        ready = len(items) >= 2 and len(analyzable_items) >= 2
+        st.markdown(f"### 분석할 릴스 · {len(items)}개")
+        st.caption("검색 결과와 직접 추가한 링크가 모두 여기에 모여요. 전부 분석해도 되고, 특정 릴스 하나나 몇 개만 골라 분석할 수도 있어요.")
+        if items:
+            st.markdown(_reel_list_html(items), unsafe_allow_html=True)
+            labels = {}
+            for item in items:
+                identity = _study_identity(item)
+                if identity not in labels:
+                    labels[identity] = _reel_label(item)
+            options = list(labels)
+            # 목록이 바뀌면 key가 바뀌어 선택이 전체로 초기화된다(옵션에 없는 값이 세션에 남지 않음).
+            picked = st.multiselect(
+                "분석할 릴스 고르기", options, default=options, format_func=labels.get,
+                key=f"radar_pick_{_items_digest(items)}", placeholder="분석할 릴스를 선택하세요",
+            )
+            selected_items = _select_items(items, picked)
+        else:
+            selected_items = []
+        analyzable_items = [item for item in selected_items if item.get("thumbnail_url") or item.get("video_url")]
+        total, chosen, usable = len(items), len(selected_items), len(analyzable_items)
+        if items:
+            st.caption(f"{total}개 중 {chosen}개 선택")
+        label = f"전체 릴스 {total}개 분석" if chosen == total and total else f"선택한 릴스 {chosen}개 분석"
         analyze = st.button(
-            "전체 릴스 공통 시각 패턴 분석",
+            label,
             type="primary",
             use_container_width=True,
-            disabled=not ctx["can_analyze_visual"] or not ready,
+            disabled=not ctx["can_analyze_visual"] or usable < 1,
         )
         if not ctx["can_analyze_visual"]:
             _gate_note("AI 분석 서비스가 연결되지 않았어요.")
-        if len(items) < 2:
-            st.info("공통 패턴을 만들려면 분석 가능한 릴스가 두 개 이상 필요합니다.")
-        elif len(analyzable_items) < 2:
-            st.warning("영상 또는 썸네일을 가져온 릴스가 두 개 이상 필요합니다.")
+        if not items:
+            st.info("분석할 릴스가 아직 없어요. 먼저 릴스를 검색해주세요.")
+        elif chosen == 0:
+            st.info("분석할 릴스를 하나 이상 골라주세요.")
+        elif usable == 0:
+            st.warning("선택한 릴스에 영상이나 썸네일이 없어 분석할 수 없어요.")
+        else:
+            if chosen > usable:
+                st.warning(f"영상·썸네일이 없는 릴스 {chosen - usable}개는 분석에서 제외돼요.")
+            if usable == 1:
+                st.info("공통 패턴은 2개 이상일 때 의미가 있어요. 1개만 고르면 그 릴스의 구성을 분석해요.")
     if not analyze:
+        return
+    # 분석 결과는 내 프로젝트로 저장되므로, AI 호출 비용이 들기 전에 로그인부터 확인한다.
+    if not require_member(ctx, "분석 결과는 내 프로젝트로 저장돼요. 로그인하면 바로 분석할 수 있어요."):
         return
 
     slot.empty()
+    items = selected_items
     synthesis = build_signal_synthesis(items, query=query)
     completed, failures = {}, []
     with st.spinner(f"릴스 {len(analyzable_items)}개의 구도·자막·컷 신호를 분석하는 중입니다..."):
@@ -497,7 +545,8 @@ def radar(ctx):
         if st.button("설정 열기", key="radar_connect"):
             _go("Settings")
     snapshot = st.session_state.get("market_snapshot")
-    if snapshot and snapshot.get("query") != query.strip():
+    # 새로 연 화면이거나 검색어가 바뀌었으면 저장된 마지막 검색 결과를 불러온다.
+    if not snapshot or snapshot.get("query") != query.strip():
         snapshot = ctx["load_previous"](query.strip()) if query.strip() else None
     if not snapshot:
         _empty("어떤 릴스가 눈에 들어오나요?", "지역이나 업종을 검색해 새로운 아이디어를 발견해 보세요.", "Radar")
@@ -1043,54 +1092,15 @@ def playbook(ctx):
 
 
 def settings(ctx):
-    _header("Settings", "내 작업 공간을 편안하게, 필요한 연결을 한곳에서.")
-    st.subheader("서비스 연결")
-    _services_panel(ctx)
-    st.subheader("Instagram 계정")
-    if not ctx.get("meta_oauth_ready"):
-        st.info("META_APP_ID, META_APP_SECRET, META_REDIRECT_URI를 .env에 넣으면 안전한 Instagram 연결을 시작할 수 있습니다.")
-    else:
-        callback_code = st.query_params.get("code", "")
-        callback_state = st.query_params.get("state", "")
-        state_path, owner = ctx["oauth_state_path"], ctx["oauth_owner"]
-        if callback_code and not st.session_state.get("meta_access_token"):
-            # Instagram에서 돌아오면 새 세션이라 state는 서버에 일회용으로 저장해 둔다. 비어 있거나 만료·재사용·타인 것이면 거부.
-            if not consume_state(state_path, callback_state, owner):
-                st.error("Instagram 연결 상태를 확인할 수 없습니다. 아래 'Instagram 연결하기'로 다시 진행해 주세요.")
-            else:
-                try:
-                    payload = ctx["exchange_oauth"](callback_code)
-                    token = payload.get("access_token", "")
-                    if not token:
-                        raise RuntimeError("Meta에서 access token을 받지 못했습니다.")
-                    st.session_state["meta_access_token"] = token
-                    ctx["save_meta_token"](token, payload)
-                    st.query_params.clear()
-                    st.success("Instagram 연결이 완료됐습니다.")
-                except Exception as exc:
-                    st.error(f"Instagram 연결 실패: {exc}")
-        if st.session_state.get("meta_access_token") or ctx.get("meta_token_present"):
-            st.success("Instagram이 연결돼 있어요. 인사이트 동기화를 실행할 수 있어요.")
-        else:
-            # 링크는 화면을 열 때 만들고, 서버 저장 state가 만료되기 전에 새로 발급한다.
-            if not st.session_state.get("meta_oauth_url") or time.time() - st.session_state.get("meta_oauth_issued_at", 0) > OAUTH_REISSUE_SECONDS:
-                try:
-                    url, _state = ctx["build_oauth_url"](state=issue_state(state_path, owner))
-                    st.session_state["meta_oauth_url"] = url
-                    st.session_state["meta_oauth_issued_at"] = time.time()
-                except Exception as exc:
-                    st.session_state.pop("meta_oauth_url", None)
-                    st.error(f"연결 링크를 만들지 못했습니다: {exc}")
-            oauth_url = st.session_state.get("meta_oauth_url")
-            if oauth_url:
-                st.link_button("Instagram 연결하기", oauth_url, type="primary", use_container_width=True)
-                st.caption("열린 Instagram 화면에서 테스트 계정으로 직접 로그인하고 승인하세요. 링크는 15분 동안 유효해요.")
-    st.subheader("트렌드 추적"); st.caption("Radar 검색 조건과 알림은 사용자별 파일에 저장됩니다.")
-    st.subheader("데이터 및 개인정보"); st.caption("데이터 내보내기와 삭제는 계정 관리 흐름에서만 처리합니다.")
-    if ctx.get("is_admin"):
-        st.subheader("시스템 현황"); jobs=ctx["list_jobs"]()
-        if jobs: st.dataframe(pd.DataFrame(jobs),use_container_width=True,hide_index=True)
+    from app.ui.settings_view import render_settings  # 설정 화면은 별도 모듈(계정·연결 상태)에서 그린다.
+    render_settings(ctx)
 
 
 def render_workspace(menu, ctx):
+    if menu not in MEMBER_ONLY_MENUS:
+        st.session_state.pop("gate_popup_menu", None)  # 다른 화면을 거치면 다음 방문에 팝업이 다시 뜬다.
+    elif is_guest(ctx):
+        _header(menu, "로그인하면 사용할 수 있어요.")
+        member_gate_page(ctx, menu)
+        return
     {"Home":home,"Radar":radar,"Studio":studio,"Insights":insights,"Playbook":playbook,"Settings":settings}[menu](ctx)

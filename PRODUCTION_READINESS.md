@@ -7,6 +7,7 @@ This file is the canonical checklist for the remaining production work. An item 
 - [ ] Meta Instagram end-to-end validation with a real Professional account and approved permissions
 - [ ] Supabase DNS/project recovery, schema application, and read/write verification
 - [~] User isolation and RLS: optional Supabase login, authenticated sessions, RLS, local library namespaces, and job ownership are implemented; production migration and real-project verification remain
+- [~] Member accounts: built-in email sign-up/sign-in (scrypt, lockout), guest mode with sign-in popup for member-only features, per-member data folders, logout clears the whole session; email verification, password reset, and a persistent session cookie remain
 - [~] Real-data dashboard: local/Meta data takes priority and source/account/period filters are implemented; production Supabase read verification remains
 - [~] HTTPS deployment: Docker, worker, Nginx gateway, health check, and mobile-coach route are prepared; a public domain, TLS termination, OAuth redirect, and real-phone verification remain
 
@@ -25,7 +26,7 @@ This file is the canonical checklist for the remaining production work. An item 
 - [ ] Real iPhone Safari and Android Chrome validation
 - [~] Security and privacy: RLS, user namespaces, encrypted persistent Meta tokens, log redaction, ZIP export, dry-run-first deletion, retention purge, cloud account deletion, and a privacy document exist; production key management and real-project verification remain
 - [~] Observability: rotating JSON logs, operation duration/failure events, API usage ledger, daily Gemini/Apify limits, an in-app operator dashboard, and optional Sentry wiring exist; production DSN verification remains
-- [~] Integration testing: 31 tests, worker workflow, queue cancellation, multi-user Meta paths, token encryption, privacy, alerts, and all five Streamlit navigation routes exist; real Meta/Supabase and real-device workflows remain
+- [~] Integration testing: 106 tests (102 passing; 4 legacy failures against the old UI), worker workflow, queue cancellation, multi-user Meta paths, token encryption, privacy, alerts, and all five Streamlit navigation routes exist; real Meta/Supabase and real-device workflows remain
 - [ ] Repository review, feature commits, legacy nested-project cleanup, and release tag
 
 ## Current External Blockers

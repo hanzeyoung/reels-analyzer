@@ -17,7 +17,7 @@ def export_user_data(auth_user_id: str, base_dir: str | Path = "user_reels", out
         raise FileNotFoundError("내보낼 사용자 데이터가 없습니다.")
     destination = Path(output_dir)
     destination.mkdir(parents=True, exist_ok=True)
-    archive = destination / f"reel_lab_export_{datetime.now():%Y%m%d_%H%M%S}.zip"
+    archive = destination / f"reels_analyzer_export_{datetime.now():%Y%m%d_%H%M%S}.zip"
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
         for item in source.rglob("*"):
             if item.is_file():

@@ -16,6 +16,9 @@ import socket
 import tempfile
 import hashlib
 import base64
+import secrets
+import shutil
+import time
 import html
 from urllib.parse import quote, urlencode
 
@@ -30,6 +33,7 @@ from app.api.gemini import (
 from app.api.meta_graph import build_oauth_url, collect_my_reels, exchange_authorization_code
 from app.api.reels_collector import get_reel_from_url, get_top_reels as collect_top_reels
 from app.core.audio_rights import annotate_tracks, save_rights_verification
+from app.core import local_auth
 from app.core.auth import auth_is_configured, delete_cloud_account, sign_in, sign_up
 from app.core.config import get_env, get_env_bool, has_env
 from app.core.content_projects import (
@@ -69,6 +73,7 @@ from app.core.observability import get_daily_usage, init_error_tracking, load_re
 from app.core.privacy import delete_user_data, export_user_data
 from app.core.token_vault import delete_encrypted_token, load_encrypted_token, save_encrypted_token
 from app.db.supabase_client import configure_auth_session, save_analysis_for_instagram_media, sync_meta_account
+from app.ui.login import render_login, show_login_dialog
 from app.ui.workspace import render_workspace
 from app.ui.appearance import appearance_controls, render_navigation
 
@@ -962,70 +967,126 @@ select:focus-visible,
 """, unsafe_allow_html=True)
 
 
+ACCOUNTS_PATH = BASE_USER_REELS_DIR / "accounts.json"
+
+
+def auth_backend() -> str:
+    """Supabase when it is configured, otherwise the built-in local accounts (AUTH_BACKEND=local|supabase overrides)."""
+    forced = get_env("AUTH_BACKEND").lower()
+    if forced in {"local", "supabase"}:
+        return forced
+    return "supabase" if auth_is_configured() else "local"
+
+
+AUTH_BACKEND = auth_backend()
+
+
+def _supabase_sign_in(email: str, password: str) -> dict:
+    try:
+        return sign_in(email, password)
+    except Exception as exc:  # noqa: BLE001 - provider errors are English/technical; show one friendly line
+        raise local_auth.AuthError("이메일 또는 비밀번호를 확인해 주세요.") from exc
+
+
+def _supabase_sign_up(email: str, password: str) -> dict:
+    if len(password) < 8:
+        raise local_auth.AuthError("비밀번호는 8자 이상이어야 해요.")
+    try:
+        return sign_up(email, password)
+    except Exception as exc:  # noqa: BLE001
+        raise local_auth.AuthError("가입하지 못했어요. 이메일을 확인하거나 이미 가입했는지 확인해 주세요.") from exc
+
+
+LOGIN_ENABLED = get_env_bool("LOGIN_ENABLED", True)
+GUEST_TTL_SECONDS = 24 * 60 * 60
+
+
+def purge_old_guest_dirs(base: Path) -> None:
+    """Guest workspaces live one day; clean up older ones whenever a new guest arrives."""
+    root = base / "guests"
+    if not root.is_dir():
+        return
+    cutoff = time.time() - GUEST_TTL_SECONDS
+    for child in root.iterdir():
+        try:
+            if child.is_dir() and child.stat().st_mtime < cutoff:
+                shutil.rmtree(child, ignore_errors=True)
+        except OSError:
+            continue
+
+
 def enforce_app_login() -> str:
+    """Strict mode (REQUIRE_APP_LOGIN) gates the whole app; otherwise guests are allowed and
+    only member features ask them to sign in."""
     if not get_env_bool("REQUIRE_APP_LOGIN", False):
+        auth_session = st.session_state.get("app_auth") or {}
+        if LOGIN_ENABLED and AUTH_BACKEND == "local" and auth_session.get("provider") == "local" and auth_session.get("user_id"):
+            return str(auth_session["user_id"])
+        if LOGIN_ENABLED and AUTH_BACKEND == "supabase" and auth_is_configured() and auth_session.get("access_token") and auth_session.get("refresh_token"):
+            configure_auth_session(auth_session["access_token"], auth_session["refresh_token"])
+            return str(auth_session.get("user_id") or "")
         configure_auth_session()
         return ""
 
-    if not auth_is_configured():
-        st.error("로그인을 사용하려면 SUPABASE_URL과 SUPABASE_ANON_KEY를 설정해야 합니다.")
-        st.stop()
-
     auth_session = st.session_state.get("app_auth") or {}
-    if auth_session.get("access_token") and auth_session.get("refresh_token"):
-        configure_auth_session(auth_session["access_token"], auth_session["refresh_token"])
-        return str(auth_session.get("user_id") or "")
-
-    st.markdown(
-        """
-        <div class="page-heading">
-          <div class="page-kicker">SECURE WORKSPACE</div>
-          <h1>Reels-analyzer 로그인</h1>
-          <p>매장 데이터와 Instagram 분석 결과를 계정별로 안전하게 분리합니다.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    login_tab, signup_tab = st.tabs(["로그인", "계정 만들기"])
-    with login_tab:
-        with st.form("app_login_form"):
-            email = st.text_input("이메일", key="login_email")
-            password = st.text_input("비밀번호", type="password", key="login_password")
-            login_submit = st.form_submit_button("로그인", type="primary", use_container_width=True)
-        if login_submit:
-            try:
-                st.session_state["app_auth"] = sign_in(email.strip(), password)
-                st.rerun()
-            except Exception as exc:
-                st.error(f"로그인 실패: {exc}")
-
-    with signup_tab:
-        with st.form("app_signup_form"):
-            signup_email = st.text_input("이메일", key="signup_email")
-            signup_password = st.text_input("비밀번호", type="password", key="signup_password")
-            signup_confirm = st.text_input("비밀번호 확인", type="password", key="signup_confirm")
-            signup_submit = st.form_submit_button("계정 만들기", use_container_width=True)
-        if signup_submit:
-            if len(signup_password) < 8:
-                st.error("비밀번호는 8자 이상이어야 합니다.")
-            elif signup_password != signup_confirm:
-                st.error("비밀번호 확인이 일치하지 않습니다.")
-            else:
-                try:
-                    payload = sign_up(signup_email.strip(), signup_password)
-                    if payload:
-                        st.session_state["app_auth"] = payload
-                        st.rerun()
-                    st.success("계정을 만들었습니다. 이메일 확인 후 로그인해주세요.")
-                except Exception as exc:
-                    st.error(f"계정 생성 실패: {exc}")
+    if AUTH_BACKEND == "supabase":
+        if not auth_is_configured():
+            st.error("로그인 설정이 아직 끝나지 않았어요. 운영자에게 문의해 주세요.")
+            st.stop()
+        if auth_session.get("access_token") and auth_session.get("refresh_token"):
+            configure_auth_session(auth_session["access_token"], auth_session["refresh_token"])
+            return str(auth_session.get("user_id") or "")
+        render_login(_supabase_sign_in, _supabase_sign_up)
+    else:
+        if auth_session.get("provider") == "local" and auth_session.get("user_id"):
+            return str(auth_session["user_id"])
+        render_login(
+            lambda email, password: local_auth.authenticate(ACCOUNTS_PATH, email, password),
+            lambda email, password: local_auth.register(ACCOUNTS_PATH, email, password),
+        )
     st.stop()
 
 
+def logout() -> None:
+    """Forget everything tied to this browser session except the look (theme/layout)."""
+    for key in [key for key in st.session_state.keys() if key not in {"theme", "layout"}]:
+        del st.session_state[key]
+    st.rerun()
+
+
+def delete_my_account() -> None:
+    delete_user_data(AUTH_USER_ID, dry_run=False)
+    if AUTH_BACKEND == "supabase":
+        delete_cloud_account(AUTH_USER_ID)
+    else:
+        local_auth.delete_account(ACCOUNTS_PATH, AUTH_USER_ID)
+    logout()
+
+
+def open_login_popup(reason: str = "") -> None:
+    if AUTH_BACKEND == "supabase":
+        show_login_dialog(_supabase_sign_in, _supabase_sign_up, reason)
+    else:
+        show_login_dialog(
+            lambda email, password: local_auth.authenticate(ACCOUNTS_PATH, email, password),
+            lambda email, password: local_auth.register(ACCOUNTS_PATH, email, password),
+            reason,
+        )
+
+
 AUTH_USER_ID = enforce_app_login()
+IS_GUEST = LOGIN_ENABLED and not AUTH_USER_ID
 if AUTH_USER_ID:
     user_namespace = hashlib.sha256(AUTH_USER_ID.encode("utf-8")).hexdigest()[:20]
     USER_REELS_DIR = BASE_USER_REELS_DIR / user_namespace
+    USER_REELS_LIBRARY = USER_REELS_DIR / "library.jsonl"
+    STORE_PROFILE_FILE = USER_REELS_DIR / "store_profile.json"
+elif IS_GUEST:
+    # 비회원은 세션마다 따로 저장해서 서로의 임시 결과가 섞이지 않게 한다. 하루 뒤 정리된다.
+    if "guest_id" not in st.session_state:
+        purge_old_guest_dirs(BASE_USER_REELS_DIR)
+        st.session_state["guest_id"] = secrets.token_hex(8)
+    USER_REELS_DIR = BASE_USER_REELS_DIR / "guests" / st.session_state["guest_id"]
     USER_REELS_LIBRARY = USER_REELS_DIR / "library.jsonl"
     STORE_PROFILE_FILE = USER_REELS_DIR / "store_profile.json"
 JOB_DB_PATH = BASE_USER_REELS_DIR / "jobs.sqlite3"
@@ -2022,9 +2083,11 @@ if not app_layout or menu == "Settings":
         if AUTH_USER_ID:
             st.caption((st.session_state.get("app_auth") or {}).get("email", AUTH_USER_ID))
             if st.button("로그아웃", use_container_width=True):
-                st.session_state.pop("app_auth", None)
-                configure_auth_session()
-                st.rerun()
+                logout()  # 세션 전체를 비워야 이전 사용자의 토큰·선택 상태가 다음 로그인으로 넘어가지 않는다.
+        elif IS_GUEST:
+            st.caption("로그인하지 않았어요")
+            if st.button("로그인 / 회원가입", key="sidebar_login", use_container_width=True):
+                open_login_popup("프로젝트와 분석 결과를 내 계정에 저장해요.")
 
 df = get_mock_reels(btype)
 
@@ -2214,6 +2277,15 @@ workspace_context = {
         ) if get_env("META_TOKEN_ENCRYPTION_KEY") else None
     ),
     "is_admin": get_env_bool("ADMIN_MODE", False),
+    "auth_user_id": AUTH_USER_ID,
+    "login_enabled": LOGIN_ENABLED,
+    "open_login": open_login_popup,
+    "auth_email": (st.session_state.get("app_auth") or {}).get("email", ""),
+    "logout": logout,
+    "export_user_data": export_user_data,
+    "delete_user_data": delete_user_data,
+    "delete_my_account": delete_my_account,
+    "can_delete_account": bool(AUTH_USER_ID) and (AUTH_BACKEND == "local" or has_env("SUPABASE_SERVICE_ROLE_KEY")),
 }
 render_workspace(menu, workspace_context)
 st.stop()

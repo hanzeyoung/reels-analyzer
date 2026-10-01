@@ -105,5 +105,6 @@ def appearance_styles():
         svg = icon(name).replace('stroke="currentColor"', 'stroke="black"')
         nav_icons += f'.ios-nav-scope [role="radiogroup"] label:nth-child({index})::before{{mask-image:url("data:image/svg+xml,{quote(svg)}");-webkit-mask-image:url("data:image/svg+xml,{quote(svg)}")}}'
     nav_icons = nav_icons.replace('.ios-nav-scope [role="radiogroup"]', '[role="radiogroup"][aria-label="주요 메뉴"]')
+    account = Path(__file__).with_name("ios_account.css").read_text(encoding="utf-8")
     layout = Path(__file__).with_name("ios_app.css").read_text(encoding="utf-8") if st.session_state.get("layout") == "app" else ""
-    st.markdown("<style>:root{" + palette + "}" + css + nav_icons + layout + "</style>", unsafe_allow_html=True)
+    st.markdown("<style>:root{" + palette + "}" + css + account + nav_icons + layout + "</style>", unsafe_allow_html=True)

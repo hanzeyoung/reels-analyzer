@@ -53,3 +53,13 @@
 .ios-wordmark svg{width:18px;height:18px;flex-shrink:0}
 [data-testid="stVerticalBlock"]:has(> .element-container .ios-toolbar-marker) [data-testid="column"]:first-child{flex:2.6 1 0!important;min-width:0}
 [data-testid="stVerticalBlock"]:has(> .element-container .ios-toolbar-marker) [data-testid="column"]:not(:first-child) button{padding-inline:.25rem}
+
+/* ===== Tab bar alignment ===== */
+/* Streamlit's radio text wrapper carries padding-left:8px (the gap from the hidden radio circle),
+   which pushed every label 4px right of its icon. Drop it and centre the text. */
+[role="radiogroup"][aria-label="주요 메뉴"] label>div:last-child{padding:0!important;margin:0!important;width:auto;text-align:center}
+[role="radiogroup"][aria-label="주요 메뉴"] label [data-testid="stMarkdownContainer"]{width:auto;text-align:center}
+/* Proportions: wider tabs so the selected pill clears "공통점 추출" by >=6px; item radius = 26 - padding - border (concentric). */
+[role="radiogroup"][aria-label="주요 메뉴"]{padding:5px;gap:0}
+[role="radiogroup"][aria-label="주요 메뉴"] label{border-radius:20px;gap:5px}
+[role="radiogroup"][aria-label="주요 메뉴"] label p{font-size:.68rem!important;letter-spacing:-.01em}
